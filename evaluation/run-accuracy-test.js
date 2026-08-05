@@ -125,11 +125,34 @@ function loadProductionConfig() {
     .sort()
     .join('|');
 
+  // ---------------------------------------------------------------------
+  // ลายนิ้วมือต้องครอบคลุมทุกอย่างที่มีผลต่อคำตอบ ไม่ใช่แค่ข้อความที่มองเห็น
+  // ---------------------------------------------------------------------
+  // เคยเขียนไว้แค่คำสั่งระบบ เครื่องมือ คำสำคัญ และฐานความรู้ ซึ่งไม่ครบ
+  // ผลคือเมื่อแก้โค้ดเครื่องคำนวณหรือโค้ดในโหนด แล้วสั่งวัดใหม่
+  // ระบบตัดสินว่าการตั้งค่าไม่เปลี่ยน จึงหยิบผลเดิมจากจุดบันทึกมาแสดงซ้ำ
+  // โดยไม่ได้ถามแบบจำลองสักข้อ แล้วรายงานว่าคะแนนเท่าเดิม
+  //
+  // เป็นความผิดพลาดที่มองไม่เห็น เพราะสคริปต์รันผ่านปกติและมีคำว่า ผลเดิม
+  // กำกับอยู่ท้ายบรรทัดเท่านั้น ถ้าไม่สังเกตจะเข้าใจว่าการแก้ไขไม่ได้ผล
+  // ทั้งที่ยังไม่เคยถูกวัดเลย
+  //
+  // จึงเปลี่ยนมาผูกลายนิ้วมือกับเนื้อไฟล์ทั้งหมดที่กำหนดพฤติกรรมของระบบ
+  // คือไฟล์ workflow ซึ่งรวมโค้ดของทุกโหนดไว้แล้ว และไฟล์เครื่องคำนวณ
+  const workflowRaw = fs.readFileSync(
+    path.join(ROOT, 'n8n/workflows/tax-advisor-workflow.json'),
+    'utf8'
+  );
+  const calculatorRaw = fs.readFileSync(
+    path.join(ROOT, 'n8n/tools/tax-calculator.js'),
+    'utf8'
+  );
+
   const hash = require('node:crypto')
     .createHash('sha256')
     .update(
-      systemMessage +
-        JSON.stringify(tools) +
+      workflowRaw +
+        calculatorRaw +
         JSON.stringify(keywordMap) +
         JSON.stringify(intentRules) +
         kbFingerprint
@@ -483,8 +506,20 @@ function grade(q, r) {
   }
 
   if (q.check === 'keywords') {
-    const missing = q.expected.filter((k) => !a.includes(k));
-    return { pass: missing.length === 0, reason: missing.length ? `ขาด: ${missing.join(', ')}` : 'ครบ' };
+    // รองรับคำที่เขียนได้หลายแบบแต่ความหมายเดียวกัน
+    //
+    // ถ้าสมาชิกในรายการเป็นอาร์เรย์ ให้ถือว่าผ่านเมื่อพบตัวใดตัวหนึ่ง
+    // เหตุผล บางคำถามมีคำตอบที่ถูกต้องหลายสำนวน เช่นถามว่าเงินเพิ่มมีเพดานหรือไม่
+    // ตอบว่า "มีเพดานตามมาตรา 27" กับ "ไม่เกินจำนวนภาษีที่ต้องเสีย" ถูกทั้งคู่
+    // ถ้าบังคับคำเดียวจะกลายเป็นการวัดสำนวน ไม่ใช่วัดความถูกต้อง
+    // ซึ่งทำให้ตัวเลขความแม่นยำต่ำกว่าความเป็นจริงโดยไม่มีเหตุผลทางวิชาการรองรับ
+    const hit = (k) => (Array.isArray(k) ? k.some((alt) => a.includes(alt)) : a.includes(k));
+    const label = (k) => (Array.isArray(k) ? k.join(' หรือ ') : k);
+    const missing = q.expected.filter((k) => !hit(k));
+    return {
+      pass: missing.length === 0,
+      reason: missing.length ? `ขาด: ${missing.map(label).join(', ')}` : 'ครบ',
+    };
   }
 
   if (q.check === 'scope') {

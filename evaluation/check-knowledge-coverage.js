@@ -131,7 +131,11 @@ function main() {
   const notAnswered = [];
   for (const q of kwQuestions) {
     const r = retrieve(q.question, cfg.keywordMap, kb);
-    const missingTerms = q.expected.filter((t) => r.context.indexOf(t) < 0);
+    // รองรับคำที่เขียนได้หลายแบบแต่ความหมายเดียวกัน ใช้กติกาเดียวกับ run-accuracy-test.js
+    // สมาชิกที่เป็นอาร์เรย์ ถือว่ามีข้อมูลเมื่อพบตัวใดตัวหนึ่งในบริบท
+    const hasTerm = (t) =>
+      Array.isArray(t) ? t.some((alt) => r.context.indexOf(alt) >= 0) : r.context.indexOf(t) >= 0;
+    const missingTerms = q.expected.filter((t) => !hasTerm(t));
     if (missingTerms.length === 0) answered.push(q);
     else notAnswered.push({ q, missingTerms, titles: r.titles });
   }
