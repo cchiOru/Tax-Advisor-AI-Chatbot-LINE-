@@ -1,0 +1,136 @@
+# ============================================================================
+#  ระบบที่ปรึกษาด้านภาษีด้วย AI บน LINE (Tax Advisor AI Chatbot)
+#  Services: PostgreSQL (n8n + app data), n8n (workflow automation), ngrok (tunnel)
+# ----------------------------------------------------------------------------
+#  หมายเหตุด้านการทำซ้ำผลการทดลอง (Reproducibility):
+#  เวอร์ชันของทุก image ถูกกำหนดผ่านตัวแปรในไฟล์ .env เพื่อให้ระบบที่ติดตั้งใหม่
+#  ได้สภาพแวดล้อมเดียวกับที่ใช้เก็บผลการทดลองทุกครั้ง หากปล่อยเป็น :latest
+#  ผลการทดสอบที่รายงานไว้อาจทำซ้ำไม่ได้เมื่อผู้ให้บริการปล่อยเวอร์ชันใหม่
+#  ให้ระบุเวอร์ชันที่ใช้จริงลงในรายงานบทที่ 3 หัวข้อเครื่องมือที่ใช้ในการวิจัย
+# ============================================================================
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: tax-advisor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DB_NAME: ${APP_DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - tax-advisor-net
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: tax-advisor-n8n
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # --- Database (n8n internal) ---
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # --- n8n core config ---
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      NODE_ENV: production
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Bangkok}
+      TZ: ${GENERIC_TIMEZONE:-Asia/Bangkok}
+
+      # --- encryption key (keep constant, do not change after first run) ---
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # --- ค่าที่ workflow เรียกใช้ผ่าน $env ---
+      APP_DB_NAME: ${APP_DB_NAME}
+      LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN}
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # ชื่อแบบจำลองที่ใช้งานอยู่จริง ใช้บันทึกลงตาราง conversations เพื่อวิเคราะห์ผล
+      # ต้องอัปเดตค่านี้ใน .env ทุกครั้งที่สลับแบบจำลอง แล้วรัน docker compose up -d --force-recreate n8n
+      ACTIVE_MODEL_NAME: ${ACTIVE_MODEL_NAME:-unknown}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/home/node/workflows
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tax-advisor-net
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: tax-advisor-ngrok
+    restart: unless-stopped
+    command:
+      - "http"
+      - "n8n:5678"
+      - "--log=stdout"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040" # ngrok web inspector -> http://localhost:4040
+    depends_on:
+      - n8n
+    networks:
+      - tax-advisor-net
+    profiles:
+      - ngrok # เปิดใช้ด้วย: docker compose --profile ngrok up -d
+
+  # ==========================================================================
+  #  pgAdmin: หน้าจอเว็บสำหรับดูและจัดการฐานข้อมูล
+  #  เปิดใช้เมื่อต้องการเท่านั้น ไม่ได้รันตลอดเวลาเพื่อไม่ให้กินทรัพยากรเครื่อง
+  #    เปิด : docker compose --profile tools up -d pgadmin
+  #    ปิด  : docker compose stop pgadmin
+  #    เข้าใช้ที่ http://localhost:5050
+  # ==========================================================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tax-advisor-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@taxadvisor.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin1234}
+      # ปิดหน้าจอถามรหัสผ่านหลักซ้ำ เพื่อความสะดวกในการใช้งานบนเครื่องพัฒนา
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      # ตั้งค่าการเชื่อมต่อฐานข้อมูลไว้ล่วงหน้า ไม่ต้องกรอกเองตอนเปิดครั้งแรก
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tax-advisor-net
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  n8n_data:
+  pgadmin_data:
+
+networks:
+  tax-advisor-net:
+    driver: bridge

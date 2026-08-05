@@ -1,0 +1,24 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Tax Advisor - ฐานข้อมูลระบบ",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "tax_advisor",
+      "Username": "n8n_admin",
+      "SSLMode": "prefer",
+      "Comment": "ฐานข้อมูลหลักของระบบ เก็บผู้ใช้ ประวัติสนทนา ฐานความรู้ และตัวบทกฎหมาย"
+    },
+    "2": {
+      "Name": "Tax Advisor - ฐานข้อมูลภายในของ n8n",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "n8n",
+      "Username": "n8n_admin",
+      "SSLMode": "prefer",
+      "Comment": "ฐานข้อมูลที่ n8n ใช้เก็บ workflow และ credential ปกติไม่ต้องแก้ไขเอง"
+    }
+  }
+}
