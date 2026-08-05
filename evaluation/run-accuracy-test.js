@@ -223,7 +223,7 @@ function classifyIntent(question, rules) {
   return category;
 }
 
-function retrieve(question, keywordMap, kb, limit = 3) {
+function retrieve(question, keywordMap, kb, limit = 3, isCalc = false) {
   const q = (question || '').toLowerCase();
   const found = [];
   for (const [trigger, term] of keywordMap) {
@@ -252,7 +252,7 @@ function retrieve(question, keywordMap, kb, limit = 3) {
   // ถ้าไม่จำลองขั้นตอนนี้ ตัวเลขที่วัดได้จะมาจากข้อมูลนำเข้าที่ใหญ่กว่าของจริง
   // ผลที่รายงานจึงไม่ใช่ความสามารถของระบบที่ผู้ใช้เจอ
   // ค่า 3000 ต้องตรงกับ CONTEXT_BUDGET ใน n8n/build-workflow.py เสมอ
-  const CONTEXT_BUDGET = 3000;
+  const CONTEXT_BUDGET = isCalc ? 1200 : 3000;
   const render = (list) =>
     list
       .map((r, i) => `[${i + 1}] หมวด: ${r.category}\nหัวข้อ: ${r.title}\n${r.content}\nแหล่งที่มา: ${r.source}`)
@@ -353,7 +353,7 @@ async function askSystem(provider, cfg, kb, question) {
   const category = classifyIntent(question, cfg.intentRules);
   const needsCalc = cfg.intentRules.calcCategories.indexOf(category) >= 0;
   // คำถามคำนวณใช้บริบทเพียง 2 รายการเหมือนระบบจริง เพื่อลดสิ่งรบกวนและลดขนาดข้อมูลนำเข้า
-  const { context, hits, titles } = retrieve(question, cfg.keywordMap, kb, needsCalc ? 2 : 3);
+  const { context, hits, titles } = retrieve(question, cfg.keywordMap, kb, needsCalc ? 2 : 3, needsCalc);
 
   // แทนที่นิพจน์ของ n8n ในคำสั่งระบบด้วยค่าจริง
   const systemMessage = cfg.systemMessage
