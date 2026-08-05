@@ -130,13 +130,14 @@ docker compose ps
 
 ```bash
 for f in seed-tax-law seed-tax-law-extra seed-tax-law-full \
-         seed-tax-law-cases seed-tax-forms seed-tax-law-deductions-detail; do
+         seed-tax-law-cases seed-tax-forms seed-tax-law-deductions-detail \
+         seed-tax-law-exempt-and-freelance; do
   docker cp postgres/$f.sql tax-advisor-postgres:/tmp/
   docker exec tax-advisor-postgres psql -U n8n_admin -d tax_advisor -f /tmp/$f.sql
 done
 ```
 
-ตรวจว่าเข้าครบ ต้องได้ 85
+ตรวจว่าเข้าครบ ต้องได้ 87
 
 ```bash
 docker exec tax-advisor-postgres psql -U n8n_admin -d tax_advisor \
@@ -388,7 +389,7 @@ PostgreSQL Full-Text Search จึงตัดคำไม่ได้ วัด
 
 | ตาราง | จำนวน | ใช้ทำอะไร |
 |---|---|---|
-| `tax_law_knowledge` | 85 รายการ | ใช้ตอบคำถามผู้ใช้ เรียบเรียงเป็นภาษาที่คนทั่วไปเข้าใจ ใช้ตัวเลขที่บังคับใช้จริงปี 2567 |
+| `tax_law_knowledge` | 87 รายการ | ใช้ตอบคำถามผู้ใช้ เรียบเรียงเป็นภาษาที่คนทั่วไปเข้าใจ ใช้ตัวเลขที่บังคับใช้จริงปี 2567 |
 | `revenue_code_current` | 309 มาตรา | ใช้ยกถ้อยคำของกฎหมายเมื่อผู้ใช้ถามถึงมาตราโดยตรง ดึงจากเว็บไซต์กรมสรรพากร |
 | `revenue_code_sections` | ฉบับ พ.ศ. 2482 | ไม่ใช้แล้ว ตัวเลขล้าสมัยทั้งหมด เก็บไว้เป็นบันทึกการทดลอง |
 
@@ -435,7 +436,7 @@ node evaluation/inspect-failures.js
 ├── postgres/
 │   ├── init/                       สคริปต์สร้างฐานข้อมูลและตาราง
 │   ├── migrations/                 การเปลี่ยนแปลงโครงสร้างตามลำดับ
-│   ├── seed-tax-law*.sql           ฐานความรู้ 85 รายการ
+│   ├── seed-tax-law*.sql           ฐานความรู้ 87 รายการ
 │   └── import-revenue-code-current.py  ดึงตัวบท 309 มาตราจาก rd.go.th
 │
 ├── evaluation/

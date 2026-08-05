@@ -247,13 +247,27 @@ function retrieve(question, keywordMap, kb, limit = 3) {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  const context = scored.length
-    ? scored
-        .map((r, i) => `[${i + 1}] หมวด: ${r.category}\nหัวข้อ: ${r.title}\n${r.content}\nแหล่งที่มา: ${r.source}`)
-        .join('\n\n---\n\n')
+  // จำกัดขนาดบริบทด้วยงบเดียวกับโหนด Build Context ในระบบจริง
+  //
+  // ถ้าไม่จำลองขั้นตอนนี้ ตัวเลขที่วัดได้จะมาจากข้อมูลนำเข้าที่ใหญ่กว่าของจริง
+  // ผลที่รายงานจึงไม่ใช่ความสามารถของระบบที่ผู้ใช้เจอ
+  // ค่า 3000 ต้องตรงกับ CONTEXT_BUDGET ใน n8n/build-workflow.py เสมอ
+  const CONTEXT_BUDGET = 3000;
+  const render = (list) =>
+    list
+      .map((r, i) => `[${i + 1}] หมวด: ${r.category}\nหัวข้อ: ${r.title}\n${r.content}\nแหล่งที่มา: ${r.source}`)
+      .join('\n\n---\n\n');
+
+  const selected = scored.slice();
+  while (selected.length > 1 && render(selected).length > CONTEXT_BUDGET) {
+    selected.pop();
+  }
+
+  const context = selected.length
+    ? render(selected)
     : 'ไม่พบข้อมูลที่ตรงกับคำถามนี้ในฐานความรู้ ให้ตอบจากความรู้ทั่วไปด้านภาษี และแนะนำให้ผู้ใช้ตรวจสอบกับกรมสรรพากรอีกครั้ง';
 
-  return { context, hits: scored.length, titles: scored.map((r) => r.title) };
+  return { context, hits: selected.length, titles: selected.map((r) => r.title) };
 }
 
 // ---------------------------------------------------------------------------
