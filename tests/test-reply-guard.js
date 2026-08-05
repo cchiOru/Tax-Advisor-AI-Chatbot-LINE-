@@ -300,3 +300,56 @@ test('RG-16 ชื่อแบบจำลองต้องเป็น unknown
   );
   assert.strictEqual(out[0].json.modelName, 'unknown');
 });
+
+// ---------------------------------------------------------------------------
+//  เกณฑ์ความยาวแยกตามประเภทคำถาม
+// ---------------------------------------------------------------------------
+//  อาจารย์ที่ปรึกษาให้ความเห็นว่าคำตอบประเภทอธิบายยาวเกินกว่าที่คนทั่วไปจะอ่านจบ
+//  ต่างจากคำตอบที่เป็นตัวเลขซึ่งต้องแจกแจงขั้นตอนให้ผู้ใช้ตรวจทานตามได้
+//  จึงแยกเกณฑ์เป็นสองค่า คำถามคำนวณ 700 ตัวอักษร คำถามอธิบาย 320 ตัวอักษร
+//
+//  การทดสอบกลุ่มนี้กันสองอย่าง
+//   1. กันไม่ให้ใครเผลอกลับไปใช้ค่าเดียวทั้งระบบ ซึ่งจะทำให้คำตอบอธิบายยาวเหมือนเดิม
+//   2. กันไม่ให้ตั้งค่าคำถามอธิบายต่ำเกินจนตัดคำตอบสั้น ๆ ที่ปกติดีอยู่แล้ว
+
+const LONG_ANSWER = Array.from({ length: 40 }, (_, i) => `บรรทัดที่ ${i + 1} อธิบายเรื่องภาษี`).join('\n');
+
+test('RG-32 คำถามอธิบายต้องถูกตัดสั้นกว่าคำถามคำนวณอย่างชัดเจน', () => {
+  const explain = runPrepareReply({ output: LONG_ANSWER, questionCategory: 'สิทธิ์ลดหย่อน' });
+  const calc = runPrepareReply({ output: LONG_ANSWER, questionCategory: 'คำนวณภาษี' });
+
+  assert.ok(
+    explain.answer.length < calc.answer.length,
+    `คำตอบอธิบาย ${explain.answer.length} ต้องสั้นกว่าคำตอบคำนวณ ${calc.answer.length}`
+  );
+});
+
+test('RG-33 คำตอบประเภทอธิบายต้องไม่เกิน 320 ตัวอักษร ไม่นับคำเตือนและข้อความชวนถามต่อ', () => {
+  for (const category of ['สิทธิ์ลดหย่อน', 'กำหนดยื่นภาษี', 'กฎหมายภาษี']) {
+    const r = runPrepareReply({ output: LONG_ANSWER, questionCategory: category });
+    const body = r.answer.split('\n\nอยากรู้รายละเอียดเพิ่ม')[0];
+    assert.ok(body.length <= 320, `หมวด ${category} ได้ ${body.length} ตัวอักษร`);
+  }
+});
+
+test('RG-34 คำถามคำนวณต้องยังยาวได้ถึง 700 ตัวอักษร เพื่อให้แจกแจงขั้นตอนครบ', () => {
+  for (const category of ['คำนวณภาษี', 'บทลงโทษ']) {
+    const r = runPrepareReply({ output: LONG_ANSWER, questionCategory: category });
+    const body = r.answer.split('\n\nอยากรู้รายละเอียดเพิ่ม')[0];
+    assert.ok(body.length > 320, `หมวด ${category} ต้องยาวเกิน 320 แต่ได้ ${body.length}`);
+    assert.ok(body.length <= 700, `หมวด ${category} ต้องไม่เกิน 700 แต่ได้ ${body.length}`);
+  }
+});
+
+test('RG-35 คำตอบอธิบายที่สั้นอยู่แล้วต้องไม่ถูกแตะต้อง', () => {
+  const short = 'ค่าลดหย่อนส่วนตัวหักได้ 60,000 บาทค่ะ ตามมาตรา 47(1)(ก)';
+  const r = runPrepareReply({ output: short, questionCategory: 'สิทธิ์ลดหย่อน' });
+
+  assert.ok(r.answer.startsWith(short), 'ข้อความเดิมต้องอยู่ครบ ไม่ถูกตัด');
+  assert.ok(!r.answer.includes('อยากรู้รายละเอียดเพิ่ม'), 'ไม่ควรต่อข้อความชวนถามต่อ เพราะไม่ได้ถูกตัด');
+});
+
+test('RG-36 คำตอบที่ถูกตัดต้องบอกผู้ใช้ว่าถามต่อได้ ไม่ใช่จบห้วน ๆ', () => {
+  const r = runPrepareReply({ output: LONG_ANSWER, questionCategory: 'สิทธิ์ลดหย่อน' });
+  assert.ok(r.answer.includes('ถามต่อได้เลยค่ะ'));
+});
