@@ -114,12 +114,26 @@ function loadProductionConfig() {
   );
 
   // ลายนิ้วมือของการตั้งค่า ใช้ตรวจว่าผลที่บันทึกไว้เดิมยังใช้ต่อได้หรือไม่
-  // ถ้าคำสั่งระบบ เครื่องมือ หรือคำสำคัญเปลี่ยน ผลเดิมจะใช้ร่วมกับผลใหม่ไม่ได้
+  // ถ้าคำสั่งระบบ เครื่องมือ คำสำคัญ หรือฐานความรู้เปลี่ยน ผลเดิมใช้ร่วมกับผลใหม่ไม่ได้
+  //
+  // ฐานความรู้ต้องรวมอยู่ในลายนิ้วมือด้วย เพราะเป็นข้อมูลที่ส่งเข้าแบบจำลองภาษาโดยตรง
+  // ถ้าไม่รวม การเพิ่มฐานความรู้ชุดใหม่แล้วรันซ้ำจะหยิบผลเดิมจากจุดบันทึกมาใช้
+  // แล้วรายงานว่าคะแนนไม่ขยับ ทั้งที่ยังไม่ได้ถามใหม่เลยสักข้อ
   const intentRules = loadIntentRules();
+  const kbFingerprint = loadKnowledgeBase()
+    .map((r) => r.title)
+    .sort()
+    .join('|');
 
   const hash = require('node:crypto')
     .createHash('sha256')
-    .update(systemMessage + JSON.stringify(tools) + JSON.stringify(keywordMap) + JSON.stringify(intentRules))
+    .update(
+      systemMessage +
+        JSON.stringify(tools) +
+        JSON.stringify(keywordMap) +
+        JSON.stringify(intentRules) +
+        kbFingerprint
+    )
     .digest('hex')
     .slice(0, 16);
 
@@ -130,13 +144,23 @@ function loadProductionConfig() {
 // จำลองการสืบค้นฐานความรู้ด้วยตรรกะเดียวกับระบบจริง
 // ---------------------------------------------------------------------------
 function loadKnowledgeBase() {
-  const files = [
-    'postgres/seed-tax-law.sql',
-    'postgres/seed-tax-law-extra.sql',
-    'postgres/seed-tax-law-full.sql',
-    'postgres/seed-tax-law-cases.sql',
-    'postgres/seed-tax-forms.sql',
-  ];
+  // ค้นไฟล์ seed อัตโนมัติ ไม่เขียนรายชื่อไว้ตายตัว
+  //
+  // เหตุผล เคยเขียนรายชื่อไฟล์ไว้ในโค้ดแล้วลืมเติมเมื่อเพิ่มฐานความรู้ชุดใหม่
+  // ผลคือการวัดใช้ฐานความรู้เก่ากว่าที่อยู่ในฐานข้อมูลจริง
+  // ตัวเลขที่ได้จึงไม่ใช่ความสามารถของระบบที่ผู้ใช้เจอ ซึ่งเป็นความผิดพลาดที่มองไม่เห็น
+  // เพราะสคริปต์ยังรันผ่านตามปกติ ไม่มีข้อความแจ้งเตือนใด ๆ
+  const dir = path.join(ROOT, 'postgres');
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => /^seed-tax-(law|forms).*\.sql$/.test(f))
+    .sort()
+    .map((f) => path.join('postgres', f));
+
+  if (files.length === 0) {
+    throw new Error('ไม่พบไฟล์ฐานความรู้ใน postgres/ เลย');
+  }
+
   const recs = [];
   const re = /\(\s*'([^']+)',\s*'([^']+)',\s*'((?:[^']|'')*)',\s*'([^']*)',\s*(\d+)\s*\)/g;
   for (const f of files) {
