@@ -41,10 +41,10 @@
 | หน้าที่ | ใครทำ | ตรวจสอบอย่างไร |
 |---|---|---|
 | เข้าใจคำถามภาษาไทยที่ผู้ใช้พิมพ์มา | แบบจำลองภาษา | วัดด้วยชุดคำถาม 115 ข้อ |
-| **คำนวณภาษี เงินเพิ่ม ค่าปรับ** | **โค้ดที่เขียนเอง** | **ชุดทดสอบหน่วย 75 ข้อ ผ่านทั้งหมด** |
+| **คำนวณภาษี เงินเพิ่ม ค่าปรับ** | **โค้ดที่เขียนเอง** | **ชุดทดสอบหน่วย 43 ข้อ ผ่านทั้งหมด** |
 | หาเนื้อหากฎหมายที่เกี่ยวข้อง | การจับคู่คำสำคัญกับฐานความรู้ | วัดว่าค้นเจอ 100% |
 | เรียบเรียงเป็นภาษาที่คนทั่วไปอ่านรู้เรื่อง | แบบจำลองภาษา | วัดความยาวและรูปแบบคำตอบ |
-| **บังคับให้มีคำเตือนทุกคำตอบ** | **โค้ดหลังบ้าน** | **ชุดทดสอบ 31 ข้อ ผ่านทั้งหมด** |
+| **บังคับให้มีคำเตือนทุกคำตอบ** | **โค้ดหลังบ้าน** | **ชุดทดสอบ 35 ข้อ ผ่านทั้งหมด** |
 
 ---
 
@@ -158,7 +158,7 @@ PostgreSQL Full-Text Search ตัดคำภาษาไทยไม่ได�
 
 | ตาราง | จำนวน | ใช้ทำอะไร |
 |---|---|---|
-| `tax_law_knowledge` | 80 รายการ | **ใช้ตอบคำถามผู้ใช้** เรียบเรียงเป็นภาษาที่คนทั่วไปเข้าใจ ใช้ตัวเลขที่บังคับใช้จริงปี 2567 |
+| `tax_law_knowledge` | 85 รายการ | **ใช้ตอบคำถามผู้ใช้** เรียบเรียงเป็นภาษาที่คนทั่วไปเข้าใจ ใช้ตัวเลขที่บังคับใช้จริงปี 2567 |
 | `revenue_code_current` | 309 มาตรา | **ใช้ยกถ้อยคำของกฎหมาย** เมื่อผู้ใช้ถามถึงมาตราโดยตรง ดึงจากเว็บไซต์กรมสรรพากร |
 | `revenue_code_sections` | ฉบับ พ.ศ. 2482 | **ไม่ใช้แล้ว** ตัวเลขล้าสมัยทั้งหมด เก็บไว้เป็นบันทึกการทดลอง |
 
@@ -198,7 +198,8 @@ docker cp postgres/seed-tax-law-extra.sql  tax-advisor-postgres:/tmp/
 docker cp postgres/seed-tax-law-full.sql   tax-advisor-postgres:/tmp/
 docker cp postgres/seed-tax-law-cases.sql  tax-advisor-postgres:/tmp/
 docker cp postgres/seed-tax-forms.sql      tax-advisor-postgres:/tmp/
-for f in seed-tax-law seed-tax-law-extra seed-tax-law-full seed-tax-law-cases seed-tax-forms; do
+docker cp postgres/seed-tax-law-deductions-detail.sql tax-advisor-postgres:/tmp/
+for f in seed-tax-law seed-tax-law-extra seed-tax-law-full seed-tax-law-cases seed-tax-forms seed-tax-law-deductions-detail; do
   docker exec tax-advisor-postgres psql -U n8n_admin -d tax_advisor -f /tmp/$f.sql
 done
 
@@ -255,7 +256,7 @@ node evaluation/inspect-failures.js
 ├── postgres/
 │   ├── init/                       สคริปต์สร้างฐานข้อมูลและตาราง
 │   ├── migrations/                 การเปลี่ยนแปลงโครงสร้างตามลำดับ
-│   ├── seed-tax-law*.sql           ฐานความรู้ 80 รายการ
+│   ├── seed-tax-law*.sql           ฐานความรู้ 85 รายการ
 │   └── import-revenue-code-current.py  ดึงตัวบท 309 มาตราจาก rd.go.th
 │
 ├── evaluation/
@@ -264,7 +265,7 @@ node evaluation/inspect-failures.js
 │   ├── check-knowledge-coverage.js     ตรวจฐานความรู้แบบไม่ใช้ API
 │   └── results/published/              ผลการวัดที่คัดไว้อ้างอิงในรายงาน
 │
-├── tests/                          ชุดทดสอบหน่วย 75 + 31 ข้อ
+├── tests/                          ชุดทดสอบหน่วย 43 + 35 ข้อ
 ├── line/setup-rich-menu.py         สร้างและติดตั้งเมนูบน LINE
 └── docs/                           เอกสารประกอบทั้งหมด
 ```
