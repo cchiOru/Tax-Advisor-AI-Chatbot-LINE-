@@ -21,6 +21,8 @@
  *    node evaluation/run-accuracy-test.js
  *    node evaluation/run-accuracy-test.js --runs=3       รันซ้ำเพื่อดูความคงเส้นคงวา
  *    node evaluation/run-accuracy-test.js --model=gemini ระบุผู้ให้บริการ
+ *    node evaluation/run-accuracy-test.js --model=gemini --list-models  ดูรุ่นที่เรียกใช้ได้
+ *    node evaluation/run-accuracy-test.js --model=gemini --name=<รุ่น> --rpm=15  ระบุรุ่นย่อย
  *
  *  ต้องใช้ Node.js เวอร์ชัน 18 ขึ้นไป
  * ============================================================================
@@ -541,7 +543,7 @@ const sd = (a) => {
 // ส่วนหลัก
 // ---------------------------------------------------------------------------
 async function main() {
-  const args = { runs: 1, model: 'gemini', fresh: false, name: '', rpm: 0 };
+  const args = { runs: 1, model: 'gemini', fresh: false, name: '', rpm: 0, listModels: false };
   for (const a of process.argv.slice(2)) {
     if (a.startsWith('--runs=')) args.runs = Math.max(1, parseInt(a.slice(7), 10) || 1);
     if (a.startsWith('--model=')) args.model = a.slice(8).trim();
@@ -553,6 +555,7 @@ async function main() {
     if (a.startsWith('--name=')) args.name = a.slice(7).trim();
     if (a.startsWith('--rpm=')) args.rpm = Math.max(0, parseInt(a.slice(6), 10) || 0);
     if (a === '--fresh') args.fresh = true;
+    if (a === '--list-models') args.listModels = true;
   }
 
   const provider = PROVIDERS[args.model];
@@ -565,6 +568,34 @@ async function main() {
   if (!provider.apiKey) {
     console.error(`ไม่พบกุญแจ API ของ ${provider.label} ในไฟล์ .env`);
     process.exit(1);
+  }
+
+  // ---------------------------------------------------------------------
+  // โหมดดูรายชื่อรุ่นที่บัญชีนี้เรียกใช้ได้จริง
+  // ---------------------------------------------------------------------
+  // จำเป็นเพราะผู้ให้บริการเลิกให้บริการรุ่นเก่ากับผู้ใช้ใหม่เป็นระยะ
+  // เช่น gemini-2.5-flash-lite ที่เอกสารทั่วไปยังแนะนำอยู่ แต่เรียกแล้วได้ 404
+  // ว่า no longer available to new users
+  //
+  // การเดาชื่อรุ่นเสียเวลามาก ถามจากผู้ให้บริการโดยตรงแม่นยำกว่าและใช้เวลาไม่กี่วินาที
+  if (args.listModels) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${provider.apiKey}`;
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.error(`เรียกดูรายชื่อรุ่นไม่สำเร็จ HTTP ${r.status}`);
+      process.exit(1);
+    }
+    const data = await r.json();
+    const usable = (data.models || []).filter((m) =>
+      (m.supportedGenerationMethods || []).includes('generateContent')
+    );
+    console.log(`\nรุ่นที่บัญชีนี้เรียกใช้ได้ ${usable.length} รุ่น\n`);
+    for (const m of usable) {
+      console.log(`  ${m.name.replace('models/', '').padEnd(42)} ${m.displayName || ''}`);
+    }
+    console.log('\nนำชื่อรุ่นไปใส่ต่อท้าย --name= เพื่อวัดด้วยรุ่นนั้น');
+    console.log('เลือกรุ่นที่ไม่ใช่ preview ก่อน เพราะโควตารายวันมักใช้ได้จริงมากกว่า\n');
+    return;
   }
 
   const cfg = loadProductionConfig();
