@@ -541,10 +541,17 @@ const sd = (a) => {
 // ส่วนหลัก
 // ---------------------------------------------------------------------------
 async function main() {
-  const args = { runs: 1, model: 'gemini', fresh: false };
+  const args = { runs: 1, model: 'gemini', fresh: false, name: '', rpm: 0 };
   for (const a of process.argv.slice(2)) {
     if (a.startsWith('--runs=')) args.runs = Math.max(1, parseInt(a.slice(7), 10) || 1);
     if (a.startsWith('--model=')) args.model = a.slice(8).trim();
+    // เลือกรุ่นย่อยของผู้ให้บริการเดียวกันได้จากบรรทัดคำสั่ง ไม่ต้องแก้ไฟล์ .env สลับไปมา
+    //
+    // จำเป็นเพราะโควตาฟรีของ Gemini ต่างกันมากในแต่ละรุ่น และรุ่นที่เป็น preview
+    // มีโควตารายวันที่ใช้จริงได้น้อยกว่าที่ประกาศไว้มาก จนวัดคำถาม 115 ข้อไม่จบในวันเดียว
+    // การสลับรุ่นเพื่อวัดจึงเป็นเรื่องปกติ ไม่ควรต้องแก้ไฟล์ตั้งค่าทุกครั้ง
+    if (a.startsWith('--name=')) args.name = a.slice(7).trim();
+    if (a.startsWith('--rpm=')) args.rpm = Math.max(0, parseInt(a.slice(6), 10) || 0);
     if (a === '--fresh') args.fresh = true;
   }
 
@@ -553,6 +560,8 @@ async function main() {
     console.error(`ไม่รู้จักผู้ให้บริการ "${args.model}" เลือกได้: ${Object.keys(PROVIDERS).join(', ')}`);
     process.exit(1);
   }
+  if (args.name) provider.model = args.name;
+  if (args.rpm) provider.rpmLimit = args.rpm;
   if (!provider.apiKey) {
     console.error(`ไม่พบกุญแจ API ของ ${provider.label} ในไฟล์ .env`);
     process.exit(1);
@@ -582,7 +591,13 @@ async function main() {
   // ทำให้แบ่งวัดได้หลายวันโดยผลยังต่อกันเป็นชุดเดียว
   const RESULT_DIR = path.join(__dirname, 'results');
   fs.mkdirSync(RESULT_DIR, { recursive: true });
-  const ckptFile = path.join(RESULT_DIR, `.checkpoint-${args.model}.json`);
+  // แยกจุดบันทึกตามรุ่นย่อยด้วย ไม่ใช่แค่ตามผู้ให้บริการ
+  // เพราะผลของ gemini-3-flash-preview กับ gemini-2.5-flash-lite ใช้แทนกันไม่ได้
+  // ถ้าใช้ไฟล์เดียวกัน การสลับรุ่นมาวัดจะทำให้ผลสองรุ่นปนกันโดยไม่รู้ตัว
+  const ckptFile = path.join(
+    RESULT_DIR,
+    `.checkpoint-${args.model}-${provider.model.replace(/[\\/:*?"<>|]/g, '-')}.json`
+  );
 
   let checkpoint = {};
   if (!args.fresh && fs.existsSync(ckptFile)) {
