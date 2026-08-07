@@ -159,7 +159,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO users (line_user_id, display_name, picture_url, status_message)\nVALUES ($1, $2, $3, $4)\nON CONFLICT (line_user_id) DO UPDATE SET\n  display_name   = COALESCE(EXCLUDED.display_name, users.display_name),\n  picture_url    = COALESCE(EXCLUDED.picture_url, users.picture_url),\n  status_message = COALESCE(EXCLUDED.status_message, users.status_message),\n  updated_at     = now()\nRETURNING id, display_name;",
+        "query": "INSERT INTO users (line_user_id, display_name, picture_url, status_message)\nVALUES ($1, $2, $3, $4)\nON CONFLICT (line_user_id) DO UPDATE SET\n  display_name   = COALESCE(EXCLUDED.display_name, users.display_name),\n  picture_url    = COALESCE(EXCLUDED.picture_url, users.picture_url),\n  status_message = COALESCE(EXCLUDED.status_message, users.status_message),\n  updated_at     = now()\nRETURNING id, display_name, consent_status;",
         "options": {
           "queryReplacement": "={{ [$('Extract LINE Data').first().json.lineUserId, $json.displayName || null, $json.pictureUrl || null, $json.statusMessage || null] }}"
         }
@@ -426,9 +426,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO conversations\n  (user_id, role, message, response_time_ms, matched_knowledge,\n   knowledge_hits, model_name, question_category)\nVALUES\n  ($1, 'user',      $2, NULL, NULL, NULL, NULL, $8),\n  ($1, 'assistant', $3, $4,   $5,   $6,   $7,   $8)\nRETURNING id;",
+        "query": "INSERT INTO conversations\n  (user_id, role, message, response_time_ms, matched_knowledge,\n   knowledge_hits, model_name, question_category)\nSELECT * FROM (VALUES\n  ($1::int, 'user',      $2::text, NULL::int, NULL::text,\n   NULL::int, NULL::varchar, $8::varchar),\n  ($1::int, 'assistant', $3::text, $4::int,  $5::text,\n   $6::int, $7::varchar, $8::varchar)\n) AS v\nWHERE $9::text = 'granted'\nRETURNING id;",
         "options": {
-          "queryReplacement": "={{ [$json.userDbId, $json.userMessage, $json.answer, $json.responseTimeMs, $json.matchedKnowledge, $json.knowledgeHits, $json.modelName, $json.questionCategory] }}"
+          "queryReplacement": "={{ [$json.userDbId, $json.userMessage, $json.answer, $json.responseTimeMs, $json.matchedKnowledge, $json.knowledgeHits, $json.modelName, $json.questionCategory, $('Upsert User').first().json.consent_status] }}"
         }
       },
       "id": "node-log",
@@ -447,6 +447,400 @@
         }
       },
       "notes": "บันทึกบทสนทนาพร้อมเวลาตอบสนองและผลการสืบค้น สำหรับนำไปวิเคราะห์ผลในบทที่ 4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fc-1",
+              "leftValue": "={{ $json.body.events[0].type }}",
+              "rightValue": "follow",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "node-filter-follow",
+      "name": "Filter: Follow Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        760
+      ],
+      "notes": "รับเฉพาะเหตุการณ์ตอนผู้ใช้กดเพิ่มเพื่อน เพื่อถามความยินยอมก่อนเริ่มเก็บข้อมูล"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO users (line_user_id, consent_status)\nVALUES ($1, 'pending')\nON CONFLICT (line_user_id) DO UPDATE SET updated_at = now()\nRETURNING id, consent_status;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.events[0].source.userId] }}"
+        }
+      },
+      "id": "node-register-follow",
+      "name": "Register User on Follow",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        260,
+        760
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Tax Advisor Postgres"
+        }
+      },
+      "notes": "สร้างระเบียนผู้ใช้ด้วยสถานะ pending ไม่ใช่ granted เพราะการที่ผู้ใช้กดเพิ่มเพื่อนไม่ถือว่ายินยอมให้เก็บข้อมูล"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $('Filter: Follow Event').first().json.body.events[0].replyToken, messages: [{ type: 'text', text: \"สวัสดีค่ะ คุณภาษีเป็นผู้ช่วยตอบคำถามภาษีเงินได้บุคคลธรรมดา\\n\\nก่อนเริ่มใช้งาน ขออนุญาตเก็บข้อมูลการสนทนาของคุณ\\nเพื่อให้ระบบจำบทสนทนาก่อนหน้าได้ และนำไปปรับปรุงคำตอบให้ดีขึ้น\\n\\nข้อมูลที่เก็บ ชื่อบัญชี LINE ข้อความที่คุณพิมพ์ และคำตอบของระบบ\\nไม่เปิดเผยรายบุคคล และไม่ส่งต่อให้บุคคลภายนอก\\n\\nถ้าไม่ยินยอม ยังถามตอบได้ตามปกติทุกอย่าง\\nเพียงแต่ระบบจะจำบทสนทนาก่อนหน้าไม่ได้\\n\\nเปลี่ยนใจเมื่อไหร่ พิมพ์ว่า \\\"ลบข้อมูลของฉัน\\\" ได้ตลอดค่ะ\" },{ type: 'template', altText: 'ขออนุญาตเก็บข้อมูลการสนทนา', template: { type: 'confirm', text: 'ยินยอมให้เก็บข้อมูลการสนทนาหรือไม่คะ', actions: [{ type: 'postback', label: 'ยินยอม', data: 'consent=granted', displayText: 'ยินยอม' },{ type: 'postback', label: 'ไม่ยินยอม', data: 'consent=denied', displayText: 'ไม่ยินยอม' }] } }] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-send-consent",
+      "name": "Send Consent Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        760
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "ส่งคำอธิบายวัตถุประสงค์พร้อมปุ่มยินยอมและไม่ยินยอม"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "pb-1",
+              "leftValue": "={{ $json.body.events[0].type }}",
+              "rightValue": "postback",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "node-filter-postback",
+      "name": "Filter: Postback Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        940
+      ],
+      "notes": "รับเฉพาะเหตุการณ์ตอนผู้ใช้กดปุ่ม ซึ่งใช้กับปุ่มยินยอมและไม่ยินยอม"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE users SET\n  consent_status  = CASE WHEN $2::text IN ('granted','denied') THEN $2::text\n                         ELSE consent_status END,\n  consent_at      = CASE WHEN $2::text IN ('granted','denied') THEN now()\n                         ELSE consent_at END,\n  consent_version = CASE WHEN $2::text IN ('granted','denied') THEN $3::text\n                         ELSE consent_version END,\n  updated_at      = now()\nWHERE line_user_id = $1\nRETURNING id, consent_status;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.events[0].source.userId, ($json.body.events[0].postback.data || '').replace('consent=',''), \"1.0\"] }}"
+        }
+      },
+      "id": "node-save-consent",
+      "name": "Save Consent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        260,
+        940
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Tax Advisor Postgres"
+        }
+      },
+      "notes": "บันทึกคำตอบพร้อมเวลาและรุ่นของข้อความที่ผู้ใช้เห็น เพื่อพิสูจน์ย้อนหลังได้"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $('Filter: Postback Event').first().json.body.events[0].replyToken, messages: [{ type: 'text', text: $json.consent_status === 'granted' ? \"ขอบคุณค่ะ ระบบจะจำบทสนทนาก่อนหน้าให้ คุณถามต่อเนื่องได้เลย\\nถ้าเปลี่ยนใจ พิมพ์ว่า \\\"ลบข้อมูลของฉัน\\\" ได้ตลอดค่ะ\\n\\nถามเรื่องภาษีได้เลยค่ะ\" : \"รับทราบค่ะ ระบบจะไม่เก็บข้อความของคุณ\\nยังถามตอบได้ตามปกติทุกอย่าง เพียงแต่จะจำบทสนทนาก่อนหน้าไม่ได้\\nถ้าเปลี่ยนใจภายหลัง พิมพ์ว่า \\\"ขอเก็บข้อมูลได้\\\" ได้ค่ะ\\n\\nถามเรื่องภาษีได้เลยค่ะ\" }] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-send-consent-result",
+      "name": "Send Consent Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        940
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "ตอบยืนยันให้ผู้ใช้รู้ว่าระบบรับคำตอบแล้ว และบอกวิธีเปลี่ยนใจ"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dc-0",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ลบข้อมูลของฉัน",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-1",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ลบข้อมูลของผม",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-2",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ถอนความยินยอม",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-3",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ลบข้อมูล",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-4",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ขอเก็บข้อมูลได้",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-5",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ยินยอมให้เก็บข้อมูล",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "dc-6",
+              "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+              "rightValue": "ให้เก็บข้อมูลได้",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "node-check-command",
+      "name": "Check Consent Command",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        260,
+        200
+      ],
+      "notes": "ดักคำสั่งลบข้อมูลและคำสั่งขอให้เก็บข้อมูลอีกครั้ง ก่อนส่งเข้าแบบจำลองภาษา"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH target AS (\n  SELECT id, line_user_id FROM users WHERE line_user_id = $1\n), wiped AS (\n  DELETE FROM conversations\n  WHERE $2::text = 'delete' AND user_id IN (SELECT id FROM target)\n), wiped_memory AS (\n  DELETE FROM n8n_chat_histories\n  WHERE $2::text = 'delete' AND session_id = $1::text\n)\nUPDATE users SET\n  consent_status  = CASE WHEN $2::text = 'delete' THEN 'denied' ELSE 'granted' END,\n  consent_at      = now(),\n  consent_version = $3,\n  updated_at      = now()\nWHERE line_user_id = $1\nRETURNING id, consent_status;",
+        "options": {
+          "queryReplacement": "={{ [$('Extract LINE Data').first().json.lineUserId, [\"ขอเก็บข้อมูลได้\", \"ยินยอมให้เก็บข้อมูล\", \"ให้เก็บข้อมูลได้\"].some(k => ($('Extract LINE Data').first().json.userMessage || '').includes(k)) ? 'regrant' : 'delete', \"1.0\"] }}"
+        }
+      },
+      "id": "node-apply-command",
+      "name": "Apply Consent Command",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        500,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Tax Advisor Postgres"
+        }
+      },
+      "notes": "ลบข้อมูลทั้งสองตาราง หรือกลับมาให้เก็บอีกครั้ง ตามคำสั่งที่ผู้ใช้พิมพ์"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ replyToken: $('Extract LINE Data').first().json.replyToken, messages: [{ type: 'text', text: $json.consent_status === 'granted' ? \"ขอบคุณค่ะ ระบบจะจำบทสนทนาก่อนหน้าให้ คุณถามต่อเนื่องได้เลย\\nถ้าเปลี่ยนใจ พิมพ์ว่า \\\"ลบข้อมูลของฉัน\\\" ได้ตลอดค่ะ\\n\\nถามเรื่องภาษีได้เลยค่ะ\" : \"ลบข้อมูลของคุณออกจากระบบเรียบร้อยแล้วค่ะ\\nทั้งประวัติการสนทนาและบทสนทนาที่ระบบจำไว้\\n\\nยังถามตอบได้ตามปกติ เพียงแต่ระบบจะจำบทสนทนาก่อนหน้าไม่ได้\\nถ้าอยากให้เก็บอีกครั้ง พิมพ์ว่า \\\"ขอเก็บข้อมูลได้\\\" ได้ค่ะ\" }] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-send-command-result",
+      "name": "Send Command Result",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "ยืนยันกับผู้ใช้ว่าลบข้อมูลแล้ว หรือกลับมาเก็บข้อมูลอีกครั้งแล้ว"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cs-1",
+              "leftValue": "={{ $('Upsert User').first().json.consent_status }}",
+              "rightValue": "granted",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "node-check-consent",
+      "name": "Check Consent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1020,
+        380
+      ],
+      "notes": "ยินยอมให้ไปเส้นทางที่มีความจำ ไม่ยินยอมให้ไปเส้นทางที่ไม่บันทึกอะไรเลย"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.agentPrompt }}",
+        "options": {
+          "systemMessage": "=คุณคือ \"คุณภาษี\" ผู้ช่วยที่ปรึกษาภาษีเงินได้บุคคลธรรมดาของไทย\n\n## กฎเหล็กข้อเดียวที่ห้ามละเมิด: ห้ามคิดเลขเอง\nคำถามที่มีตัวเลขเงิน ต้องเรียกเครื่องมือก่อนตอบเสมอ ไม่มีข้อยกเว้น\n- ภาษีเงินได้ ใช้ calculate_thai_personal_income_tax\n- เงินเพิ่มและค่าปรับกรณียื่นล่าช้า ใช้ calculate_late_filing_penalty\nห้ามคำนวณในใจ ห้ามประมาณ ห้ามเดา แม้ดูเป็นเลขง่าย\nคำถามแบบใช่หรือไม่ก็ต้องเรียก เช่น \"เงินเดือน 20,000 ต้องเสียภาษีไหม\"\nให้เรียกเครื่องมือแล้วดูว่าผลเป็น 0 หรือไม่ ห้ามสรุปเองว่าไม่ต้องเสีย\n\nการส่งตัวเลขให้เครื่องมือ\n- อ่านหน่วยเวลาให้ดี นี่คือจุดที่ผิดบ่อยที่สุด\n  \"ต่อเดือน\" \"เดือนละ\" ให้คูณ 12 ก่อนส่ง\n  \"ปีละ\" \"ต่อปี\" \"ทั้งปี\" ห้ามคูณ ส่งตรง ๆ\n  เช่น \"เงินเดือนปีละ 1,000,000\" ต้องส่ง salary 1000000 ไม่ใช่ 12000000\n- ยื่นช้าบอกเป็นวันส่ง daysLate บอกเป็นเดือนส่ง monthsLate ห้ามแปลงหน่วยเอง\n- ถามกลับเฉพาะเมื่อไม่มีตัวเลขให้เลย ถ้าถามหลักเกณฑ์ทั่วไปให้ตอบทันที\n- ได้ผลจากเครื่องมือแล้วต้องแจกแจงให้ผู้ใช้ตรวจทานตามได้ ห้ามตอบแค่ยอดสุดท้ายบรรทัดเดียว\n  เรียงตามนี้ เงินได้รวม หักค่าใช้จ่าย หักค่าลดหย่อน เงินได้สุทธิ ภาษีที่ต้องชำระ\n  ใช้ตัวเลขจากเครื่องมือเท่านั้น ห้ามคำนวณขั้นตอนย่อยเองซ้ำ\n\n## ขอบเขต\nตอบภาษีเงินได้บุคคลธรรมดาเป็นหลัก อ้างมาตราเมื่อเกี่ยวข้อง\nภาษีประเภทอื่น เช่น มูลค่าเพิ่ม นิติบุคคล ที่ดิน ป้าย อากรแสตมป์ มรดก\nตอบเชิงหลักเกณฑ์ได้ แต่ห้ามคำนวณตัวเลขให้ เพราะไม่มีเครื่องมือรองรับ\nให้แนะนำหน่วยงานแทน ที่ดินและป้ายเป็นของท้องถิ่น สรรพสามิตและศุลกากรเป็นของกรมอื่น\nคำถามที่ไม่เกี่ยวกับภาษีเลย เช่นถามสภาพอากาศหรือขอให้เขียนโค้ด\nให้ปฏิเสธหนึ่งประโยค แล้วต่อด้วยประโยคที่สองว่าช่วยเรื่องภาษีเงินได้บุคคลธรรมดาได้\nห้ามปฏิเสธเฉย ๆ โดยไม่บอกว่าถามอะไรได้ เพราะผู้ใช้จะไม่รู้ว่าคุยอะไรกับระบบนี้ได้บ้าง\n\n## การอ้างตัวบท\nผู้ใช้ขอถ้อยคำของมาตรา ให้เรียก lookup_revenue_code แล้วยกมาแสดง\nห้ามนำตัวเลขจากตัวบทไปตอบคำถามเรื่องจำนวนเงินเด็ดขาด\nตัวบทหลายมาตราถูกกฎกระทรวงแก้ภายหลัง เช่น 47(1)(ง) เขียน 10,000 แต่ใช้จริง 100,000\nตัวเลขที่ตอบต้องมาจากข้อมูลอ้างอิงหรือเครื่องคำนวณเท่านั้น\n\n## ข้อมูลผู้ใช้\nชื่อ {{ $('Upsert User').first().json.display_name || 'ไม่ทราบชื่อ' }}\nประเภทคำถามที่ระบบจำแนกได้ {{ $json.questionCategory }}\n\n## ข้อมูลอ้างอิงที่ระบบค้นมาให้\nใช้เป็นอันดับแรก ถ้าไม่ตรงคำถามให้ตอบจากความรู้ทั่วไปแล้วบอกให้ตรวจสอบกับกรมสรรพากร\n\n{{ $json.retrievedContext }}\n\n## รูปแบบการตอบ\n- ภาษาไทย ลงท้ายว่า ค่ะ เสมอ ห้ามใช้ ครับ\n- บอกคำตอบก่อนแล้วค่อยอธิบาย เช่น \"ภาษีที่ต้องชำระคือ 45,500 บาทค่ะ\"\n- ความยาวดูจากคำสั่งกำกับท้ายคำถาม คำถามตัวเลขแจกแจงไม่เกิน 4 บรรทัด\n  คำถามอธิบายไม่เกิน 3 บรรทัด ไม่ต้องยกตัวอย่างเอง\n- ห้ามใช้ Markdown ห้ามใช้ ** ห้ามใช้ # ห้ามใช้ตาราง ให้ขึ้นบรรทัดใหม่และใช้ - แทน\n- ใส่ลูกน้ำในตัวเลข เช่น 20,600 บาท ใช้ emoji ไม่เกิน 3 ตัว\n- ห้ามถามกลับหรือชวนคุยต่อท้ายคำตอบ\n\n## จริยธรรม\nให้ข้อมูลเบื้องต้น ไม่ใช่คำปรึกษาทางกฎหมาย กรณีซับซ้อนแนะนำกรมสรรพากร 1161\nห้ามแนะนำวิธีหลีกเลี่ยงภาษีที่ผิดกฎหมาย แนะนำได้เฉพาะการวางแผนภาษีที่ถูกกฎหมาย\n\nย้ำอีกครั้ง: คำถามที่มีตัวเลขเงิน ต้องเรียกเครื่องมือคำนวณก่อนตอบเสมอ",
+          "maxIterations": 5
+        }
+      },
+      "id": "node-agent-nomem",
+      "name": "AI Agent (No Memory)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1240,
+        620
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "ตั้งค่าเหมือน AI Agent (Tax Advisor) ทุกประการ ใช้แบบจำลองและเครื่องมือชุดเดียวกัน ต่างกันแค่ไม่ได้ต่อกับหน่วยความจำ สำหรับผู้ใช้ที่ไม่ยินยอมให้เก็บข้อมูล"
     }
   ],
   "connections": {
@@ -460,6 +854,62 @@
           },
           {
             "node": "Filter: Text Message Only",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter: Follow Event",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Filter: Postback Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Follow Event": {
+      "main": [
+        [
+          {
+            "node": "Register User on Follow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Register User on Follow": {
+      "main": [
+        [
+          {
+            "node": "Send Consent Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Postback Event": {
+      "main": [
+        [
+          {
+            "node": "Save Consent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Save Consent": {
+      "main": [
+        [
+          {
+            "node": "Send Consent Result",
             "type": "main",
             "index": 0
           }
@@ -482,7 +932,36 @@
       "main": [
         [
           {
+            "node": "Check Consent Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Consent Command": {
+      "main": [
+        [
+          {
+            "node": "Apply Consent Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Get LINE Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Consent Command": {
+      "main": [
+        [
+          {
+            "node": "Send Command Result",
             "type": "main",
             "index": 0
           }
@@ -526,7 +1005,25 @@
       "main": [
         [
           {
+            "node": "Check Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Consent": {
+      "main": [
+        [
+          {
             "node": "AI Agent (Tax Advisor)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent (No Memory)",
             "type": "main",
             "index": 0
           }
@@ -534,6 +1031,17 @@
       ]
     },
     "AI Agent (Tax Advisor)": {
+      "main": [
+        [
+          {
+            "node": "Prepare LINE Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent (No Memory)": {
       "main": [
         [
           {
@@ -567,6 +1075,11 @@
             "node": "AI Agent (Tax Advisor)",
             "type": "ai_languageModel",
             "index": 0
+          },
+          {
+            "node": "AI Agent (No Memory)",
+            "type": "ai_languageModel",
+            "index": 0
           }
         ]
       ]
@@ -589,6 +1102,11 @@
             "node": "AI Agent (Tax Advisor)",
             "type": "ai_tool",
             "index": 0
+          },
+          {
+            "node": "AI Agent (No Memory)",
+            "type": "ai_tool",
+            "index": 0
           }
         ]
       ]
@@ -600,6 +1118,11 @@
             "node": "AI Agent (Tax Advisor)",
             "type": "ai_tool",
             "index": 0
+          },
+          {
+            "node": "AI Agent (No Memory)",
+            "type": "ai_tool",
+            "index": 0
           }
         ]
       ]
@@ -609,6 +1132,11 @@
         [
           {
             "node": "AI Agent (Tax Advisor)",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "AI Agent (No Memory)",
             "type": "ai_tool",
             "index": 0
           }

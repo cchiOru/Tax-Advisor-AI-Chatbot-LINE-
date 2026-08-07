@@ -11,9 +11,18 @@ CREATE TABLE IF NOT EXISTS users (
     id              SERIAL PRIMARY KEY,
     line_user_id    VARCHAR(64) UNIQUE NOT NULL,
     display_name    VARCHAR(255),
+    -- ความยินยอมให้เก็บข้อมูลส่วนบุคคล ตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562
+    --   pending ถามแล้วยังไม่ตอบ / granted ยินยอม / denied ไม่ยินยอม
+    -- ค่าเริ่มต้นเป็น pending เสมอ ห้ามตั้งเป็น granted โดยอัตโนมัติ
+    -- เพราะการนิ่งเฉยไม่ถือเป็นการให้ความยินยอม
+    consent_status  VARCHAR(16) NOT NULL DEFAULT 'pending'
+                    CHECK (consent_status IN ('pending', 'granted', 'denied')),
+    consent_at      TIMESTAMPTZ,
+    consent_version VARCHAR(16),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS idx_users_consent_status ON users (consent_status);
 
 -- =========================================================
 -- ประวัติการสนทนา (บันทึกไว้เพื่อนำไปวิเคราะห์ผลในบทที่ 4)

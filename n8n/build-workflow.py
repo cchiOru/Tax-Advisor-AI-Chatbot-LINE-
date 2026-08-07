@@ -495,6 +495,64 @@ ORDER BY score DESC, category
 LIMIT 3;"""
 
 
+# ===========================================================================
+#  การขอความยินยอมเก็บข้อมูลส่วนบุคคล
+# ---------------------------------------------------------------------------
+#  ระบบเก็บชื่อบัญชี LINE ข้อความที่ผู้ใช้พิมพ์ และคำตอบของระบบ
+#  ซึ่งเป็นข้อมูลส่วนบุคคลตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562
+#  จึงต้องขอความยินยอมก่อนเก็บ
+#
+#  หลักที่ใช้ออกแบบข้อความ
+#    1. บอกวัตถุประสงค์ตามจริงทั้งหมด ทั้งการใช้เป็นความจำบทสนทนา
+#       และการนำไปวิเคราะห์เพื่อปรับปรุงคำตอบ
+#       ถ้าบอกไม่ครบแล้วนำไปใช้เกินกว่าที่บอก จะเป็นการเก็บเกินขอบเขตที่ขอไว้
+#    2. บอกด้วยว่าปฏิเสธแล้วเสียอะไร เพื่อให้ผู้ใช้ตัดสินใจโดยรู้ผล
+#    3. ปฏิเสธแล้วต้องยังใช้งานได้ครบทุกอย่าง เพราะความยินยอมต้องให้โดยอิสระ
+#       ถ้าไม่ยินยอมแล้วใช้ไม่ได้ ก็ไม่ถือว่าเป็นความยินยอมที่สมบูรณ์
+#    4. บอกวิธีถอนความยินยอมไว้ในข้อความเดียวกัน ไม่ต้องไปหาที่อื่น
+# ===========================================================================
+
+# ต้องเพิ่มเลขรุ่นทุกครั้งที่แก้ข้อความด้านล่างในสาระสำคัญ
+# เพราะระบบบันทึกไว้ว่าผู้ใช้แต่ละคนยินยอมกับข้อความรุ่นใด
+# ถ้าเปลี่ยนวัตถุประสงค์หรือขอบเขตข้อมูลที่เก็บ ต้องขอความยินยอมใหม่จากทุกคน
+CONSENT_VERSION = "1.0"
+
+CONSENT_NOTICE = (
+    "สวัสดีค่ะ คุณภาษีเป็นผู้ช่วยตอบคำถามภาษีเงินได้บุคคลธรรมดา\n\n"
+    "ก่อนเริ่มใช้งาน ขออนุญาตเก็บข้อมูลการสนทนาของคุณ\n"
+    "เพื่อให้ระบบจำบทสนทนาก่อนหน้าได้ และนำไปปรับปรุงคำตอบให้ดีขึ้น\n\n"
+    "ข้อมูลที่เก็บ ชื่อบัญชี LINE ข้อความที่คุณพิมพ์ และคำตอบของระบบ\n"
+    "ไม่เปิดเผยรายบุคคล และไม่ส่งต่อให้บุคคลภายนอก\n\n"
+    "ถ้าไม่ยินยอม ยังถามตอบได้ตามปกติทุกอย่าง\n"
+    "เพียงแต่ระบบจะจำบทสนทนาก่อนหน้าไม่ได้\n\n"
+    'เปลี่ยนใจเมื่อไหร่ พิมพ์ว่า "ลบข้อมูลของฉัน" ได้ตลอดค่ะ'
+)
+
+# ข้อความยืนยันหลังผู้ใช้กดเลือก
+CONSENT_GRANTED_REPLY = (
+    "ขอบคุณค่ะ ระบบจะจำบทสนทนาก่อนหน้าให้ คุณถามต่อเนื่องได้เลย\n"
+    'ถ้าเปลี่ยนใจ พิมพ์ว่า "ลบข้อมูลของฉัน" ได้ตลอดค่ะ\n\n'
+    "ถามเรื่องภาษีได้เลยค่ะ"
+)
+CONSENT_DENIED_REPLY = (
+    "รับทราบค่ะ ระบบจะไม่เก็บข้อความของคุณ\n"
+    "ยังถามตอบได้ตามปกติทุกอย่าง เพียงแต่จะจำบทสนทนาก่อนหน้าไม่ได้\n"
+    'ถ้าเปลี่ยนใจภายหลัง พิมพ์ว่า "ขอเก็บข้อมูลได้" ได้ค่ะ\n\n'
+    "ถามเรื่องภาษีได้เลยค่ะ"
+)
+DELETE_DONE_REPLY = (
+    "ลบข้อมูลของคุณออกจากระบบเรียบร้อยแล้วค่ะ\n"
+    "ทั้งประวัติการสนทนาและบทสนทนาที่ระบบจำไว้\n\n"
+    "ยังถามตอบได้ตามปกติ เพียงแต่ระบบจะจำบทสนทนาก่อนหน้าไม่ได้\n"
+    'ถ้าอยากให้เก็บอีกครั้ง พิมพ์ว่า "ขอเก็บข้อมูลได้" ได้ค่ะ'
+)
+
+# คำสั่งที่ผู้ใช้พิมพ์เพื่อจัดการข้อมูลของตัวเอง
+# ต้องจับก่อนส่งเข้าแบบจำลองภาษา เพราะเป็นคำสั่งของระบบ ไม่ใช่คำถามภาษี
+DELETE_KEYWORDS = ["ลบข้อมูลของฉัน", "ลบข้อมูลของผม", "ถอนความยินยอม", "ลบข้อมูล"]
+REGRANT_KEYWORDS = ["ขอเก็บข้อมูลได้", "ยินยอมให้เก็บข้อมูล", "ให้เก็บข้อมูลได้"]
+
+
 SYSTEM_MESSAGE = """=คุณคือ "คุณภาษี" ผู้ช่วยที่ปรึกษาภาษีเงินได้บุคคลธรรมดาของไทย
 
 ## กฎเหล็กข้อเดียวที่ห้ามละเมิด: ห้ามคิดเลขเอง
@@ -1171,7 +1229,7 @@ def build():
                     "  picture_url    = COALESCE(EXCLUDED.picture_url, users.picture_url),\n"
                     "  status_message = COALESCE(EXCLUDED.status_message, users.status_message),\n"
                     "  updated_at     = now()\n"
-                    "RETURNING id, display_name;"
+                    "RETURNING id, display_name, consent_status;"
                 ),
                 "options": {
                     "queryReplacement": (
@@ -1396,20 +1454,34 @@ def build():
         {
             "parameters": {
                 "operation": "executeQuery",
+                # บันทึกเฉพาะผู้ใช้ที่ยินยอมเท่านั้น
+                #
+                # ใช้ SELECT ... WHERE แทน INSERT ... VALUES เพื่อให้เงื่อนไขอยู่ในคำสั่งเดียว
+                # ถ้าไม่ยินยอม เงื่อนไขเป็นเท็จ จะไม่มีแถวใดถูกเพิ่ม และไม่เกิดข้อผิดพลาด
+                #
+                # เหตุผลที่ตรวจซ้ำตรงนี้ทั้งที่แยกเส้นทางไปแล้ว
+                #   เป็นการกันอีกชั้นหนึ่ง ถ้าวันหนึ่งมีคนแก้เส้นทางในเวิร์กโฟลว์แล้วพลาด
+                #   ข้อมูลของคนที่ไม่ยินยอมจะยังไม่ถูกบันทึกอยู่ดี
+                #   เรื่องที่ผิดแล้วแก้ย้อนหลังไม่ได้ ควรมีด่านมากกว่าหนึ่งชั้น
                 "query": (
                     "INSERT INTO conversations\n"
                     "  (user_id, role, message, response_time_ms, matched_knowledge,\n"
                     "   knowledge_hits, model_name, question_category)\n"
-                    "VALUES\n"
-                    "  ($1, 'user',      $2, NULL, NULL, NULL, NULL, $8),\n"
-                    "  ($1, 'assistant', $3, $4,   $5,   $6,   $7,   $8)\n"
+                    "SELECT * FROM (VALUES\n"
+                    "  ($1::int, 'user',      $2::text, NULL::int, NULL::text,\n"
+                    "   NULL::int, NULL::varchar, $8::varchar),\n"
+                    "  ($1::int, 'assistant', $3::text, $4::int,  $5::text,\n"
+                    "   $6::int, $7::varchar, $8::varchar)\n"
+                    ") AS v\n"
+                    "WHERE $9::text = 'granted'\n"
                     "RETURNING id;"
                 ),
                 "options": {
                     "queryReplacement": (
                         "={{ [$json.userDbId, $json.userMessage, $json.answer, "
                         "$json.responseTimeMs, $json.matchedKnowledge, $json.knowledgeHits, "
-                        "$json.modelName, $json.questionCategory] }}"
+                        "$json.modelName, $json.questionCategory, "
+                        "$('Upsert User').first().json.consent_status] }}"
                     )
                 },
             },
@@ -1422,6 +1494,353 @@ def build():
             "credentials": PG_CRED,
             "notes": "บันทึกบทสนทนาพร้อมเวลาตอบสนองและผลการสืบค้น สำหรับนำไปวิเคราะห์ผลในบทที่ 4",
         },
+        # ===================================================================
+        #  เส้นทางที่ 2 ตอนผู้ใช้กดเพิ่มเพื่อน ถามความยินยอมก่อนเก็บข้อมูล
+        # ===================================================================
+        # แยกเป็นตัวกรองต่างหากที่ต่อจาก webhook โดยตรง ไม่ไปยุ่งกับตัวกรองเดิม
+        # เพราะเส้นทางข้อความปกติทำงานดีอยู่แล้ว การแก้ตัวกรองเดิมเสี่ยงทำให้พังทั้งระบบ
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {"caseSensitive": True, "leftValue": "",
+                                "typeValidation": "loose", "version": 2},
+                    "conditions": [
+                        {"id": "fc-1",
+                         "leftValue": "={{ $json.body.events[0].type }}",
+                         "rightValue": "follow",
+                         "operator": {"type": "string", "operation": "equals"}}
+                    ],
+                    "combinator": "and",
+                },
+                "looseTypeValidation": True,
+                "options": {},
+            },
+            "id": "node-filter-follow",
+            "name": "Filter: Follow Event",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [20, 760],
+            "notes": "รับเฉพาะเหตุการณ์ตอนผู้ใช้กดเพิ่มเพื่อน เพื่อถามความยินยอมก่อนเริ่มเก็บข้อมูล",
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": (
+                    "INSERT INTO users (line_user_id, consent_status)\n"
+                    "VALUES ($1, 'pending')\n"
+                    "ON CONFLICT (line_user_id) DO UPDATE SET updated_at = now()\n"
+                    "RETURNING id, consent_status;"
+                ),
+                "options": {
+                    "queryReplacement": "={{ [$json.body.events[0].source.userId] }}"
+                },
+            },
+            "id": "node-register-follow",
+            "name": "Register User on Follow",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [260, 760],
+            "onError": "continueRegularOutput",
+            "credentials": PG_CRED,
+            "notes": (
+                "สร้างระเบียนผู้ใช้ด้วยสถานะ pending ไม่ใช่ granted "
+                "เพราะการที่ผู้ใช้กดเพิ่มเพื่อนไม่ถือว่ายินยอมให้เก็บข้อมูล"
+            ),
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.line.me/v2/bot/message/reply",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {"name": "Authorization",
+                         "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"},
+                        {"name": "Content-Type", "value": "application/json"},
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                # ส่งสองข้อความในครั้งเดียว
+                # ข้อความแรกเป็นคำอธิบายฉบับเต็ม ข้อความที่สองเป็นปุ่มให้กด
+                # เหตุผลที่แยก เพราะปุ่มแบบ confirm ของ LINE จำกัดข้อความไว้ 240 ตัวอักษร
+                # ซึ่งสั้นเกินกว่าจะอธิบายวัตถุประสงค์ให้ครบได้
+                "jsonBody": (
+                    "={{ JSON.stringify({ replyToken: $('Filter: Follow Event').first()"
+                    ".json.body.events[0].replyToken, messages: ["
+                    # ใช้ json.dumps เพื่อหลบอักขระพิเศษและขึ้นบรรทัดใหม่ให้ถูกต้อง
+                    # ถ้าต่อสตริงเองจะพังทันทีที่ข้อความมีเครื่องหมายคำพูดหรือ \n
+                    "{ type: 'text', text: " + json.dumps(CONSENT_NOTICE, ensure_ascii=False) + " },"
+                    "{ type: 'template', altText: 'ขออนุญาตเก็บข้อมูลการสนทนา',"
+                    " template: { type: 'confirm',"
+                    " text: 'ยินยอมให้เก็บข้อมูลการสนทนาหรือไม่คะ',"
+                    " actions: ["
+                    "{ type: 'postback', label: 'ยินยอม', data: 'consent=granted',"
+                    " displayText: 'ยินยอม' },"
+                    "{ type: 'postback', label: 'ไม่ยินยอม', data: 'consent=denied',"
+                    " displayText: 'ไม่ยินยอม' }] } }] }) }}"
+                ),
+                "options": {"timeout": 10000},
+            },
+            "id": "node-send-consent",
+            "name": "Send Consent Request",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [500, 760],
+            "onError": "continueRegularOutput",
+            "notes": "ส่งคำอธิบายวัตถุประสงค์พร้อมปุ่มยินยอมและไม่ยินยอม",
+        },
+        # ===================================================================
+        #  เส้นทางที่ 3 ตอนผู้ใช้กดปุ่มตอบ บันทึกคำตอบลงฐานข้อมูล
+        # ===================================================================
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {"caseSensitive": True, "leftValue": "",
+                                "typeValidation": "loose", "version": 2},
+                    "conditions": [
+                        {"id": "pb-1",
+                         "leftValue": "={{ $json.body.events[0].type }}",
+                         "rightValue": "postback",
+                         "operator": {"type": "string", "operation": "equals"}}
+                    ],
+                    "combinator": "and",
+                },
+                "looseTypeValidation": True,
+                "options": {},
+            },
+            "id": "node-filter-postback",
+            "name": "Filter: Postback Event",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [20, 940],
+            "notes": "รับเฉพาะเหตุการณ์ตอนผู้ใช้กดปุ่ม ซึ่งใช้กับปุ่มยินยอมและไม่ยินยอม",
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                # อ่านคำตอบจากข้อมูลที่แนบมากับปุ่ม ซึ่งมีรูปแบบ consent=granted หรือ consent=denied
+                # รับเฉพาะสองค่านี้ ค่าอื่นจะไม่ถูกบันทึก เพราะข้อมูลที่แนบมากับปุ่ม
+                # เป็นข้อมูลจากฝั่งผู้ใช้ ไม่ควรเชื่อโดยไม่ตรวจ
+                "query": (
+                    "UPDATE users SET\n"
+                    "  consent_status  = CASE WHEN $2::text IN ('granted','denied') THEN $2::text\n"
+                    "                         ELSE consent_status END,\n"
+                    "  consent_at      = CASE WHEN $2::text IN ('granted','denied') THEN now()\n"
+                    "                         ELSE consent_at END,\n"
+                    "  consent_version = CASE WHEN $2::text IN ('granted','denied') THEN $3::text\n"
+                    "                         ELSE consent_version END,\n"
+                    "  updated_at      = now()\n"
+                    "WHERE line_user_id = $1\n"
+                    "RETURNING id, consent_status;"
+                ),
+                "options": {
+                    "queryReplacement": (
+                        "={{ [$json.body.events[0].source.userId,"
+                        " ($json.body.events[0].postback.data || '').replace('consent=',''),"
+                        " " + json.dumps(CONSENT_VERSION) + "] }}"
+                    )
+                },
+            },
+            "id": "node-save-consent",
+            "name": "Save Consent",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [260, 940],
+            "onError": "continueRegularOutput",
+            "credentials": PG_CRED,
+            "notes": "บันทึกคำตอบพร้อมเวลาและรุ่นของข้อความที่ผู้ใช้เห็น เพื่อพิสูจน์ย้อนหลังได้",
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.line.me/v2/bot/message/reply",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {"name": "Authorization",
+                         "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"},
+                        {"name": "Content-Type", "value": "application/json"},
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": (
+                    "={{ JSON.stringify({ replyToken: $('Filter: Postback Event').first()"
+                    ".json.body.events[0].replyToken, messages: [{ type: 'text', text:"
+                    " $json.consent_status === 'granted' ? "
+                    + json.dumps(CONSENT_GRANTED_REPLY, ensure_ascii=False) + " : "
+                    + json.dumps(CONSENT_DENIED_REPLY, ensure_ascii=False) + " }] }) }}"
+                ),
+                "options": {"timeout": 10000},
+            },
+            "id": "node-send-consent-result",
+            "name": "Send Consent Result",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [500, 940],
+            "onError": "continueRegularOutput",
+            "notes": "ตอบยืนยันให้ผู้ใช้รู้ว่าระบบรับคำตอบแล้ว และบอกวิธีเปลี่ยนใจ",
+        },
+        # ===================================================================
+        #  คำสั่งจัดการข้อมูลของตัวเอง ที่ผู้ใช้พิมพ์เข้ามาเป็นข้อความ
+        # ===================================================================
+        # ต้องดักก่อนส่งเข้าแบบจำลองภาษา เพราะเป็นคำสั่งของระบบ ไม่ใช่คำถามภาษี
+        # ถ้าปล่อยผ่านไป แบบจำลองจะพยายามตอบเรื่องภาษีให้ ซึ่งไม่ตรงกับที่ผู้ใช้ต้องการ
+        # และสิทธิถอนความยินยอมจะใช้ไม่ได้จริง
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {"caseSensitive": False, "leftValue": "",
+                                "typeValidation": "loose", "version": 2},
+                    "conditions": [
+                        {"id": "dc-%d" % i,
+                         "leftValue": "={{ ($json.userMessage || '').replace(/\\s/g, '') }}",
+                         "rightValue": kw,
+                         "operator": {"type": "string", "operation": "contains"}}
+                        for i, kw in enumerate(DELETE_KEYWORDS + REGRANT_KEYWORDS)
+                    ],
+                    "combinator": "or",
+                },
+                "looseTypeValidation": True,
+                "options": {},
+            },
+            "id": "node-check-command",
+            "name": "Check Consent Command",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [260, 200],
+            "notes": "ดักคำสั่งลบข้อมูลและคำสั่งขอให้เก็บข้อมูลอีกครั้ง ก่อนส่งเข้าแบบจำลองภาษา",
+        },
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                # คำสั่งเดียวรองรับทั้งลบข้อมูลและกลับมาให้เก็บอีกครั้ง
+                # แยกด้วยการตรวจว่าข้อความที่ผู้ใช้พิมพ์ตรงกับคำสั่งกลุ่มใด
+                #
+                # กรณีลบ ต้องลบทั้งสองที่
+                #   conversations       ประวัติที่เก็บไว้วิเคราะห์
+                #   n8n_chat_histories  บทสนทนาที่ระบบจำไว้
+                # ถ้าลบที่เดียวจะเหลืออีกที่ ซึ่งเท่ากับไม่ได้ลบจริงตามที่บอกผู้ใช้
+                "query": (
+                    "WITH target AS (\n"
+                    "  SELECT id, line_user_id FROM users WHERE line_user_id = $1\n"
+                    "), wiped AS (\n"
+                    "  DELETE FROM conversations\n"
+                    "  WHERE $2::text = 'delete' AND user_id IN (SELECT id FROM target)\n"
+                    "), wiped_memory AS (\n"
+                    "  DELETE FROM n8n_chat_histories\n"
+                    "  WHERE $2::text = 'delete' AND session_id = $1::text\n"
+                    ")\n"
+                    "UPDATE users SET\n"
+                    "  consent_status  = CASE WHEN $2::text = 'delete' THEN 'denied' ELSE 'granted' END,\n"
+                    "  consent_at      = now(),\n"
+                    "  consent_version = $3,\n"
+                    "  updated_at      = now()\n"
+                    "WHERE line_user_id = $1\n"
+                    "RETURNING id, consent_status;"
+                ),
+                "options": {
+                    "queryReplacement": (
+                        "={{ [$('Extract LINE Data').first().json.lineUserId,"
+                        " " + json.dumps(REGRANT_KEYWORDS, ensure_ascii=False)
+                        + ".some(k => ($('Extract LINE Data').first().json.userMessage || '')"
+                        ".includes(k)) ? 'regrant' : 'delete',"
+                        " " + json.dumps(CONSENT_VERSION) + "] }}"
+                    )
+                },
+            },
+            "id": "node-apply-command",
+            "name": "Apply Consent Command",
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.5,
+            "position": [500, 200],
+            "onError": "continueRegularOutput",
+            "credentials": PG_CRED,
+            "notes": "ลบข้อมูลทั้งสองตาราง หรือกลับมาให้เก็บอีกครั้ง ตามคำสั่งที่ผู้ใช้พิมพ์",
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.line.me/v2/bot/message/reply",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {"name": "Authorization",
+                         "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}"},
+                        {"name": "Content-Type", "value": "application/json"},
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": (
+                    "={{ JSON.stringify({ replyToken: $('Extract LINE Data').first()"
+                    ".json.replyToken, messages: [{ type: 'text', text:"
+                    " $json.consent_status === 'granted' ? "
+                    + json.dumps(CONSENT_GRANTED_REPLY, ensure_ascii=False) + " : "
+                    + json.dumps(DELETE_DONE_REPLY, ensure_ascii=False) + " }] }) }}"
+                ),
+                "options": {"timeout": 10000},
+            },
+            "id": "node-send-command-result",
+            "name": "Send Command Result",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [740, 200],
+            "onError": "continueRegularOutput",
+            "notes": "ยืนยันกับผู้ใช้ว่าลบข้อมูลแล้ว หรือกลับมาเก็บข้อมูลอีกครั้งแล้ว",
+        },
+        # ===================================================================
+        #  แยกเส้นทางตามความยินยอม
+        # ===================================================================
+        # ผู้ใช้ที่ไม่ยินยอมต้องได้คำตอบเหมือนเดิมทุกอย่าง ต่างกันแค่ไม่มีความจำ
+        # จึงใช้ตัวแทนปัญญาประดิษฐ์สองตัวที่ตั้งค่าเหมือนกันทุกประการ
+        # ต่างกันแค่ตัวหนึ่งต่อกับหน่วยความจำ อีกตัวไม่ต่อ
+        #
+        # ทำไมไม่ใช้ตัวเดียวแล้วสลับกุญแจหน่วยความจำ
+        #   เพราะโหนดหน่วยความจำจะเขียนลงตารางทุกครั้งที่ทำงาน
+        #   ต่อให้สลับกุญแจให้จำข้ามครั้งไม่ได้ ข้อความก็ยังถูกเขียนลงฐานข้อมูลอยู่ดี
+        #   ซึ่งขัดกับที่บอกผู้ใช้ไปว่าจะไม่เก็บ
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {"caseSensitive": True, "leftValue": "",
+                                "typeValidation": "loose", "version": 2},
+                    "conditions": [
+                        {"id": "cs-1",
+                         "leftValue": "={{ $('Upsert User').first().json.consent_status }}",
+                         "rightValue": "granted",
+                         "operator": {"type": "string", "operation": "equals"}}
+                    ],
+                    "combinator": "and",
+                },
+                "looseTypeValidation": True,
+                "options": {},
+            },
+            "id": "node-check-consent",
+            "name": "Check Consent",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [1020, 380],
+            "notes": "ยินยอมให้ไปเส้นทางที่มีความจำ ไม่ยินยอมให้ไปเส้นทางที่ไม่บันทึกอะไรเลย",
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "={{ $json.agentPrompt }}",
+                "options": {"systemMessage": SYSTEM_MESSAGE, "maxIterations": 5},
+            },
+            "id": "node-agent-nomem",
+            "name": "AI Agent (No Memory)",
+            "type": "@n8n/n8n-nodes-langchain.agent",
+            "typeVersion": 1.7,
+            "position": [1240, 620],
+            "onError": "continueRegularOutput",
+            "notes": (
+                "ตั้งค่าเหมือน AI Agent (Tax Advisor) ทุกประการ ใช้แบบจำลองและเครื่องมือชุดเดียวกัน "
+                "ต่างกันแค่ไม่ได้ต่อกับหน่วยความจำ สำหรับผู้ใช้ที่ไม่ยินยอมให้เก็บข้อมูล"
+            ),
+        },
     ]
 
     connections = {
@@ -1430,18 +1849,55 @@ def build():
                 [
                     {"node": "Respond OK to LINE", "type": "main", "index": 0},
                     {"node": "Filter: Text Message Only", "type": "main", "index": 0},
+                    # สองเส้นทางใหม่ต่อจาก webhook โดยตรง ไม่ผ่านตัวกรองเดิม
+                    # จึงไม่กระทบเส้นทางข้อความปกติที่ทำงานได้ดีอยู่แล้ว
+                    {"node": "Filter: Follow Event", "type": "main", "index": 0},
+                    {"node": "Filter: Postback Event", "type": "main", "index": 0},
                 ]
             ]
+        },
+        "Filter: Follow Event": {
+            "main": [[{"node": "Register User on Follow", "type": "main", "index": 0}], []]
+        },
+        "Register User on Follow": {
+            "main": [[{"node": "Send Consent Request", "type": "main", "index": 0}]]
+        },
+        "Filter: Postback Event": {
+            "main": [[{"node": "Save Consent", "type": "main", "index": 0}], []]
+        },
+        "Save Consent": {
+            "main": [[{"node": "Send Consent Result", "type": "main", "index": 0}]]
         },
         "Filter: Text Message Only": {
             "main": [[{"node": "Extract LINE Data", "type": "main", "index": 0}], []]
         },
-        "Extract LINE Data": {"main": [[{"node": "Get LINE Profile", "type": "main", "index": 0}]]},
+        "Extract LINE Data": {
+            "main": [[{"node": "Check Consent Command", "type": "main", "index": 0}]]
+        },
+        # คำสั่งจัดการข้อมูลไปเส้นทางของตัวเอง คำถามภาษีไปเส้นทางเดิม
+        "Check Consent Command": {
+            "main": [
+                [{"node": "Apply Consent Command", "type": "main", "index": 0}],
+                [{"node": "Get LINE Profile", "type": "main", "index": 0}],
+            ]
+        },
+        "Apply Consent Command": {
+            "main": [[{"node": "Send Command Result", "type": "main", "index": 0}]]
+        },
         "Get LINE Profile": {"main": [[{"node": "Upsert User", "type": "main", "index": 0}]]},
         "Upsert User": {"main": [[{"node": "Search Tax Knowledge", "type": "main", "index": 0}]]},
         "Search Tax Knowledge": {"main": [[{"node": "Build Context", "type": "main", "index": 0}]]},
-        "Build Context": {"main": [[{"node": "AI Agent (Tax Advisor)", "type": "main", "index": 0}]]},
+        "Build Context": {"main": [[{"node": "Check Consent", "type": "main", "index": 0}]]},
+        "Check Consent": {
+            "main": [
+                [{"node": "AI Agent (Tax Advisor)", "type": "main", "index": 0}],
+                [{"node": "AI Agent (No Memory)", "type": "main", "index": 0}],
+            ]
+        },
         "AI Agent (Tax Advisor)": {
+            "main": [[{"node": "Prepare LINE Reply", "type": "main", "index": 0}]]
+        },
+        "AI Agent (No Memory)": {
             "main": [[{"node": "Prepare LINE Reply", "type": "main", "index": 0}]]
         },
         "Prepare LINE Reply": {
@@ -1454,22 +1910,26 @@ def build():
         },
         LLM["node_name"]: {
             "ai_languageModel": [
-                [{"node": "AI Agent (Tax Advisor)", "type": "ai_languageModel", "index": 0}]
+                [{"node": "AI Agent (Tax Advisor)", "type": "ai_languageModel", "index": 0},
+                 {"node": "AI Agent (No Memory)", "type": "ai_languageModel", "index": 0}]
             ]
         },
         "Postgres Chat Memory": {
             "ai_memory": [[{"node": "AI Agent (Tax Advisor)", "type": "ai_memory", "index": 0}]]
         },
         "Tax Calculator Tool": {
-            "ai_tool": [[{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0}]]
+            "ai_tool": [[{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0},
+              {"node": "AI Agent (No Memory)", "type": "ai_tool", "index": 0}]]
         },
         "Revenue Code Lookup Tool": {
             "ai_tool": [
-                [{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0}]
+                [{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0},
+                 {"node": "AI Agent (No Memory)", "type": "ai_tool", "index": 0}]
             ]
         },
         "Late Penalty Tool": {
-            "ai_tool": [[{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0}]]
+            "ai_tool": [[{"node": "AI Agent (Tax Advisor)", "type": "ai_tool", "index": 0},
+              {"node": "AI Agent (No Memory)", "type": "ai_tool", "index": 0}]]
         },
     }
 
