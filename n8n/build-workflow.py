@@ -1224,12 +1224,45 @@ if (needsDisclaimer) {
   answer = answer + DISCLAIMER;
 }
 
+// ---------------------------------------------------------------------------
+//  เลือกช่องทางส่ง ระหว่าง reply token กับ push message
+// ---------------------------------------------------------------------------
+//  reply token ของ LINE ใช้ได้ประมาณ 60 วินาทีนับจากเวลาที่ผู้ใช้ส่งข้อความ
+//  ถ้าหมดอายุแล้วยังเรียก reply API อยู่ LINE จะปฏิเสธ
+//  ผลคือผู้ใช้ไม่ได้รับอะไรเลย ไม่มีแม้แต่ข้อความบอกว่าเกิดอะไรขึ้น
+//  ทั้งที่ระบบคำนวณคำตอบถูกต้องเรียบร้อยแล้ว
+//
+//  พบจากการวัดผลรอบที่ 8 คำถามเดียวกันใช้เวลา 139 และ 169 วินาทีในสองรอบ
+//  แต่รอบที่สามใช้แค่ 2.1 วินาที มัธยฐานทั้งชุดคือ 1.4 วินาที
+//  จึงไม่ใช่คำถามที่หนัก แต่เป็นบริการแบบจำลองช้าเป็นครั้งคราว
+//  ซึ่งเป็นสิ่งที่ควบคุมไม่ได้และต้องออกแบบให้รองรับ
+//
+//  ทำไมไม่ใช้ push message ตลอด
+//    push message มีโควตาจำกัดต่อเดือนและคิดเงินเมื่อเกิน ส่วน reply ใช้ฟรีไม่จำกัด
+//    ถ้าเปลี่ยนไปใช้ push ทั้งหมดจะเปลืองโควตาโดยไม่จำเป็น
+//    เพราะคำถามส่วนใหญ่ตอบเสร็จภายในไม่กี่วินาที
+//    จึงใช้ reply เป็นหลัก และสลับไป push เฉพาะกรณีที่ช้าจริงเท่านั้น
+//
+//  ทำไมตั้งไว้ที่ 50 วินาที ไม่ใช่ 60
+//    ต้องเผื่อเวลาที่ใช้เดินทางในเครือข่ายและเวลาที่โหนดถัดไปทำงาน
+//    ถ้าตั้งชิดเส้น 60 พอดี จะมีกรณีที่คำนวณว่าทันแต่พอส่งจริงกลับไม่ทัน
+const REPLY_TOKEN_SAFE_MS = 50000;
+const useReplyToken = responseTimeMs < REPLY_TOKEN_SAFE_MS;
+
 return [
   {
     json: {
+      // บอกโหนดถัดไปว่าจะส่งทางไหน
+      useReplyToken,
+
       // ส่วนที่ส่งให้ LINE API (ต้องมีเฉพาะฟิลด์ที่ LINE รู้จักเท่านั้น)
       linePayload: {
         replyToken: $('Extract LINE Data').first().json.replyToken,
+        messages: [{ type: 'text', text: answer }],
+      },
+      // ใช้เมื่อ reply token หมดอายุแล้ว ส่งตรงเข้าห้องแชทของผู้ใช้แทน
+      pushPayload: {
+        to: $('Extract LINE Data').first().json.lineUserId,
         messages: [{ type: 'text', text: answer }],
       },
       // ส่วนที่บันทึกลงฐานข้อมูลเพื่อนำไปวิเคราะห์ผล
@@ -1649,15 +1682,87 @@ def build():
             "name": "Reply to LINE",
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.2,
-            "position": [1600, 280],
+            "position": [1820, 280],
             "onError": "continueRegularOutput",
             "retryOnFail": True,
             "maxTries": 2,
             "waitBetweenTries": 1000,
             "notes": (
-                "ส่งคำตอบกลับผู้ใช้ผ่าน LINE Reply API "
+                "ส่งคำตอบกลับผู้ใช้ผ่าน LINE Reply API ใช้ได้ฟรีไม่จำกัดจำนวน "
                 "ลองใหม่ได้ 1 ครั้งเผื่อเครือข่ายสะดุดชั่วคราว "
                 "(reply token ใช้ได้ครั้งเดียว การลองใหม่จึงช่วยเฉพาะกรณีที่ครั้งแรกส่งไม่ถึงจริง ๆ)"
+            ),
+        },
+        # -------------------------------------------------------------------
+        #  ด่านตัดสินใจว่าจะส่งคำตอบทางไหน
+        # -------------------------------------------------------------------
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "loose",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-reply-token-valid",
+                            "leftValue": "={{ $json.useReplyToken }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "true", "singleValue": True},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "looseTypeValidation": True,
+                "options": {},
+            },
+            "id": "node-check-reply-token",
+            "name": "Check Reply Token",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [1600, 380],
+            "notes": (
+                "ตรวจว่า reply token ยังไม่หมดอายุ (ใช้ได้ราว 60 วินาทีนับจากผู้ใช้ส่งข้อความ) "
+                "ทางจริงส่งด้วย Reply API ซึ่งใช้ฟรี "
+                "ทางเท็จส่งด้วย Push API ซึ่งมีโควตาจำกัด จึงใช้เฉพาะตอนจำเป็น "
+                "ถ้าไม่มีด่านนี้ คำตอบที่ช้าเกิน 60 วินาทีจะสูญหายทั้งหมดโดยผู้ใช้ไม่รู้ตัว"
+            ),
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://api.line.me/v2/bot/message/push",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "=Bearer {{$env.LINE_CHANNEL_ACCESS_TOKEN}}",
+                        },
+                        {"name": "Content-Type", "value": "application/json"},
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.pushPayload) }}",
+                "options": {"timeout": 10000},
+            },
+            "id": "node-push",
+            "name": "Push to LINE",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [1820, 480],
+            "onError": "continueRegularOutput",
+            "retryOnFail": True,
+            "maxTries": 2,
+            "waitBetweenTries": 1000,
+            "notes": (
+                "ใช้เมื่อ reply token หมดอายุแล้วเท่านั้น "
+                "ส่งข้อความตรงเข้าห้องแชทของผู้ใช้โดยไม่ต้องใช้ token "
+                "push message มีโควตาจำกัดต่อเดือนและคิดเงินเมื่อเกิน "
+                "จึงไม่ได้ใช้เป็นช่องทางหลัก แต่ใช้เป็นตาข่ายรองรับกรณีที่ระบบตอบช้าผิดปกติ"
             ),
         },
         {
@@ -2118,9 +2223,17 @@ def build():
         "Prepare LINE Reply": {
             "main": [
                 [
-                    {"node": "Reply to LINE", "type": "main", "index": 0},
+                    {"node": "Check Reply Token", "type": "main", "index": 0},
                     {"node": "Log Conversation", "type": "main", "index": 0},
                 ]
+            ]
+        },
+        # ทางจริงคือ token ยังใช้ได้ ส่งด้วย Reply API ซึ่งฟรี
+        # ทางเท็จคือ token หมดอายุแล้ว ส่งด้วย Push API ซึ่งมีโควตา
+        "Check Reply Token": {
+            "main": [
+                [{"node": "Reply to LINE", "type": "main", "index": 0}],
+                [{"node": "Push to LINE", "type": "main", "index": 0}],
             ]
         },
         LLM["node_name"]: {

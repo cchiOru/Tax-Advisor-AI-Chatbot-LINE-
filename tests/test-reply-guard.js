@@ -37,12 +37,20 @@ const PREPARE_CODE = loadNodeCode('Prepare LINE Reply');
  * @param {string} opts.questionCategory  ประเภทคำถามจากโหนด Build Context
  * @param {boolean} opts.error            จำลองกรณี AI Agent ผิดพลาด
  */
-function runPrepareReply({ output, questionCategory = 'คำนวณภาษี', error = false, upsertFailed = false }) {
+function runPrepareReply({
+  output,
+  questionCategory = 'คำนวณภาษี',
+  error = false,
+  upsertFailed = false,
+  elapsedMs = 1234,
+}) {
   const nodeData = {
     'Extract LINE Data': {
       replyToken: 'TOKEN-TEST',
+      lineUserId: 'U-ผู้ใช้ทดสอบ',
       userMessage: 'คำถามทดสอบ',
-      receivedAt: Date.now() - 1234,
+      // ใช้จำลองกรณีระบบตอบช้าจน reply token หมดอายุ
+      receivedAt: Date.now() - elapsedMs,
     },
     // เมื่อโหนด Upsert User ล้มเหลว n8n จะส่งรายการที่มีแต่ฟิลด์ error ต่อมา ไม่มี id
     'Upsert User': upsertFailed ? { error: 'connection refused' } : { id: 99 },
@@ -449,4 +457,75 @@ test('RG-43 ข้อมูลขั้นตอนกลางผิดรู�
 test('RG-44 ข้อความแจ้งข้อผิดพลาดต้องไม่ถูกเติมบรรทัดคำนวณจาก', () => {
   const r = runWithSteps('', STEP);
   assert.ok(!r.answer.includes('คำนวณจาก'), 'ไม่มีการคำนวณเกิดขึ้น จึงไม่ควรมีบรรทัดนี้');
+});
+
+// ---------------------------------------------------------------------------
+// กลุ่มที่ 8: ตาข่ายรองรับเมื่อ reply token หมดอายุ
+// ---------------------------------------------------------------------------
+//  ที่มา
+//    reply token ของ LINE ใช้ได้ราว 60 วินาทีนับจากเวลาที่ผู้ใช้ส่งข้อความ
+//    ถ้าหมดอายุแล้วยังเรียก Reply API อยู่ LINE จะปฏิเสธ
+//    ผู้ใช้จะไม่ได้รับอะไรเลย ไม่มีแม้แต่ข้อความบอกว่าเกิดอะไรขึ้น
+//    ทั้งที่ระบบคำนวณคำตอบถูกต้องเรียบร้อยแล้ว เป็นความล้มเหลวแบบเงียบ
+//
+//    พบจากการวัดผลรอบที่ 8 คำถามเดียวกัน (Q33) ใช้เวลา 139 และ 169 วินาที
+//    ในสองรอบ แต่รอบที่สามใช้แค่ 2.1 วินาที มัธยฐานทั้งชุดคือ 1.4 วินาที
+//    จึงไม่ใช่คำถามที่หนัก แต่เป็นบริการแบบจำลองช้าเป็นครั้งคราว
+//    ซึ่งควบคุมไม่ได้และต้องออกแบบระบบให้รองรับ
+
+const wfJson = () => JSON.parse(fs.readFileSync(WORKFLOW, 'utf8'));
+const findNode = (name) => wfJson().nodes.find((n) => n.name === name);
+
+test('RG-45 คำตอบที่ตอบทันเวลา ต้องเลือกส่งด้วย Reply API ซึ่งใช้ฟรี', () => {
+  const r = runPrepareReply({ output: 'คำตอบทดสอบ', elapsedMs: 2000 });
+  assert.strictEqual(r.useReplyToken, true);
+  assert.strictEqual(r.linePayload.replyToken, 'TOKEN-TEST');
+});
+
+test('RG-46 คำตอบที่ช้าจน token หมดอายุ ต้องเปลี่ยนไปใช้ Push API', () => {
+  const r = runPrepareReply({ output: 'คำตอบทดสอบ', elapsedMs: 65000 });
+  assert.strictEqual(r.useReplyToken, false, 'ช้า 65 วินาทีแล้วยังจะใช้ reply token อยู่');
+  assert.strictEqual(r.pushPayload.to, 'U-ผู้ใช้ทดสอบ', 'ต้องส่งเข้าห้องแชทของผู้ใช้คนที่ถาม');
+});
+
+test('RG-47 เกณฑ์เวลาต้องเผื่อไว้ก่อนถึง 60 วินาที ไม่ใช่ตั้งชิดเส้นพอดี', () => {
+  // ถ้าตั้งไว้ที่ 60 วินาทีเป๊ะ จะมีกรณีที่คำนวณว่าทันแต่พอส่งจริงกลับไม่ทัน
+  // เพราะยังต้องใช้เวลาเดินทางในเครือข่ายและเวลาที่โหนดถัดไปทำงานอีก
+  const ก่อนเส้น = runPrepareReply({ output: 'คำตอบ', elapsedMs: 55000 });
+  assert.strictEqual(ก่อนเส้น.useReplyToken, false, 'ที่ 55 วินาทีควรเผื่อไว้แล้ว');
+});
+
+test('RG-48 ทั้งสองช่องทางต้องส่งข้อความเดียวกัน ผู้ใช้ต้องไม่ได้คำตอบที่ต่างกัน', () => {
+  const เร็ว = runPrepareReply({ output: 'คำตอบทดสอบ', elapsedMs: 2000 });
+  const ช้า = runPrepareReply({ output: 'คำตอบทดสอบ', elapsedMs: 65000 });
+  assert.strictEqual(เร็ว.linePayload.messages[0].text, เร็ว.pushPayload.messages[0].text);
+  assert.strictEqual(ช้า.linePayload.messages[0].text, ช้า.pushPayload.messages[0].text);
+});
+
+test('RG-49 เวิร์กโฟลว์ต้องมีด่านตัดสินใจและปลายทางครบทั้งสองทาง', () => {
+  const conn = wfJson().connections;
+  assert.ok(findNode('Check Reply Token'), 'ไม่พบโหนด Check Reply Token');
+  assert.ok(findNode('Push to LINE'), 'ไม่พบโหนด Push to LINE');
+
+  const branches = conn['Check Reply Token'].main;
+  assert.strictEqual(branches[0][0].node, 'Reply to LINE', 'ทางจริงต้องไป Reply API');
+  assert.strictEqual(branches[1][0].node, 'Push to LINE', 'ทางเท็จต้องไป Push API');
+});
+
+test('RG-50 Push API ต้องยิงไปที่ปลายทางของตัวเอง ไม่ใช่ปลายทางของ Reply', () => {
+  const push = findNode('Push to LINE');
+  assert.ok(/\/message\/push$/.test(push.parameters.url), `ปลายทางผิด: ${push.parameters.url}`);
+  assert.ok(
+    push.parameters.jsonBody.includes('pushPayload'),
+    'Push API ต้องใช้ pushPayload ไม่ใช่ linePayload ที่มี replyToken อยู่ข้างใน'
+  );
+});
+
+test('RG-51 การบันทึกบทสนทนาต้องเกิดขึ้นไม่ว่าจะส่งทางไหน', () => {
+  // ถ้าเอา Log Conversation ไปต่อท้ายด่านตัดสินใจ จะบันทึกได้แค่ทางเดียว
+  // ข้อมูลของกรณีที่ตอบช้าซึ่งเป็นกรณีที่น่าสนใจที่สุดจะหายไปจากงานวิจัย
+  const targets = JSON.parse(fs.readFileSync(WORKFLOW, 'utf8')).connections['Prepare LINE Reply']
+    .main[0].map((x) => x.node);
+  assert.ok(targets.includes('Log Conversation'), 'ต้องบันทึกจากจุดก่อนแยกทาง');
+  assert.ok(targets.includes('Check Reply Token'));
 });
