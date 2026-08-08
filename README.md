@@ -174,6 +174,24 @@ python n8n/build-workflow.py
    มีโหนด PostgreSQL 8 โหนด และโหนด Google Gemini 1 โหนด
 4. กดสวิตช์ Active ที่มุมขวาบนให้เป็นสีเขียว
 
+**ทำครั้งเดียวแล้วไม่ต้องผูก credential ซ้ำอีก** หลังผูกเสร็จรอบแรก ให้ไปที่เมนู
+Credentials ใน n8n คลิก credential ที่สร้างไว้ แล้วคัดลอกรหัสจากแถบที่อยู่
+
+```
+http://localhost:5678/home/credentials/AbCdEf123456
+                                       ^^^^^^^^^^^^ นี่คือรหัส
+```
+
+นำไปใส่ในไฟล์ `.env` สองบรรทัดนี้
+
+```
+N8N_PG_CREDENTIAL_ID=รหัสของ credential ฐานข้อมูล
+N8N_LLM_CREDENTIAL_ID=รหัสของ credential แบบจำลองภาษา
+```
+
+ครั้งต่อไปที่รัน `python n8n/build-workflow.py` ไฟล์จะผูก credential มาให้เลย
+นำเข้าแล้วกด Active ได้ทันที ไม่ต้องเปิดทีละโหนดอีก
+
 ค่าที่ใช้ผูก credential ของ PostgreSQL
 
 | ช่อง | ใส่อะไร |

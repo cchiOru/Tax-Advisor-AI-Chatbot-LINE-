@@ -27,10 +27,43 @@ ROOT = Path(__file__).resolve().parent.parent
 CALC_SRC = ROOT / "n8n" / "tools" / "tax-calculator.js"
 OUTPUT = ROOT / "n8n" / "workflows" / "tax-advisor-workflow.json"
 
+
+
+# ---------------------------------------------------------------------------
+# รหัส credential ที่ฝังลงในไฟล์เวิร์กโฟลว์
+# ---------------------------------------------------------------------------
+# ปัญหาที่เจอซ้ำ ๆ ทุกครั้งที่นำเข้าไฟล์ใหม่ n8n จะขึ้นว่าโหนดขาด credential
+# แล้วต้องเปิดทีละโหนดไปเลือกใหม่ ซึ่งมี 8 โหนด ทำทุกครั้งที่แก้ระบบ
+#
+# สาเหตุคือไฟล์ฝังรหัสตัวอย่างไว้ ซึ่งไม่ตรงกับ credential ที่มีอยู่จริงใน n8n
+# ทางแก้คือให้ผู้ใช้บันทึกรหัสจริงไว้ในไฟล์ .env ครั้งเดียว
+# แล้วสคริปต์จะฝังรหัสนั้นให้อัตโนมัติทุกครั้งที่ประกอบไฟล์
+#
+# หารหัสได้จากแถบที่อยู่ตอนเปิดหน้าแก้ไข credential ใน n8n
+#   http://localhost:5678/home/credentials/<รหัสที่ต้องการ>
+#
+# ถ้าไม่ตั้งค่าไว้ ระบบยังทำงานเหมือนเดิมทุกอย่าง เพียงแต่ต้องผูกด้วยมือ
+def load_env():
+    """อ่านค่าจากไฟล์ .env แบบง่าย ไม่ต้องพึ่งไลบรารีภายนอก"""
+    env = {}
+    p = ROOT / ".env"
+    if not p.exists():
+        return env
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+
+ENV = load_env()
+
 PG_CRED = {
     "postgres": {
-        "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-        "name": "Tax Advisor Postgres",
+        "id": ENV.get("N8N_PG_CREDENTIAL_ID") or "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
+        "name": ENV.get("N8N_PG_CREDENTIAL_NAME") or "Tax Advisor Postgres",
     }
 }
 # ---------------------------------------------------------------------------
@@ -85,7 +118,12 @@ for _arg in sys.argv[1:]:
 
 LLM = PROVIDERS[PROVIDER]
 MODEL_NAME = LLM["model"]
-LLM_CRED = {LLM["cred_key"]: {"id": LLM["cred_placeholder"], "name": LLM["cred_name"]}}
+LLM_CRED = {
+    LLM["cred_key"]: {
+        "id": ENV.get("N8N_LLM_CREDENTIAL_ID") or LLM["cred_placeholder"],
+        "name": ENV.get("N8N_LLM_CREDENTIAL_NAME") or LLM["cred_name"],
+    }
+}
 
 
 def load_calculator_code(entry_function: str) -> str:
@@ -2084,6 +2122,19 @@ def build():
     print(f"สร้างไฟล์สำเร็จ: {OUTPUT}")
     print(f"  จำนวน node: {len(nodes)}")
     print(f"  ขนาดโค้ดเครื่องคำนวณที่ฝัง: {len(calculator_code):,} ตัวอักษร")
+
+    pg_id = PG_CRED["postgres"]["id"]
+    llm_id = list(LLM_CRED.values())[0]["id"]
+    if pg_id.startswith("REPLACE_") or llm_id.startswith("REPLACE_"):
+        print()
+        print("  หมายเหตุ ยังไม่ได้ตั้งรหัส credential ไว้ในไฟล์ .env")
+        print("  หลังนำเข้า n8n จะต้องเปิดโหนดที่ขึ้นเตือนแล้วเลือก credential ด้วยมือ")
+        print("  ตั้งค่าครั้งเดียวแล้วไม่ต้องทำอีก โดยเพิ่มบรรทัดนี้ในไฟล์ .env")
+        print("    N8N_PG_CREDENTIAL_ID=<รหัสของ credential ฐานข้อมูล>")
+        print("    N8N_LLM_CREDENTIAL_ID=<รหัสของ credential แบบจำลองภาษา>")
+        print("  หารหัสได้จากแถบที่อยู่ตอนเปิดหน้าแก้ไข credential ใน n8n")
+    else:
+        print(f"  ผูก credential ให้แล้วจากไฟล์ .env  ฐานข้อมูล {pg_id}  แบบจำลอง {llm_id}")
 
 
 if __name__ == "__main__":
