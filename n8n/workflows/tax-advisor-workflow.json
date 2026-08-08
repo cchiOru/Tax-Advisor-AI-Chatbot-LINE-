@@ -178,8 +178,8 @@
       "maxTries": 2,
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "บันทึกผู้ใช้รายใหม่พร้อมข้อมูลโปรไฟล์ หรืออัปเดตข้อมูลของผู้ใช้เดิม ตั้ง onError ให้ทำงานต่อ เพราะการบันทึกผู้ใช้เป็นงานรอง ถ้าฐานข้อมูลมีปัญหา ผู้ใช้ต้องยังได้รับคำตอบอยู่ดี"
@@ -206,8 +206,8 @@
       "maxTries": 2,
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "สืบค้นฐานความรู้ด้วยการจับคู่คำสำคัญเฉพาะโดเมน ให้คะแนนตามจำนวนคำสำคัญที่พบ (ใช้แทน Full-Text Search เพราะภาษาไทยไม่มีช่องว่างระหว่างคำ)"
@@ -273,8 +273,8 @@
       "waitBetweenTries": 3000,
       "credentials": {
         "googlePalmApi": {
-          "id": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",
-          "name": "Google Gemini API"
+          "id": "Ph9lxUzEqdVpBDwf",
+          "name": "Google Gemini(PaLM) Api v2"
         }
       },
       "notes": "แบบจำลองภาษาขนาดใหญ่ temperature 0.3 เพื่อให้คำตอบคงเส้นคงวา เหมาะกับงานให้ข้อมูลตามกฎหมาย"
@@ -298,8 +298,8 @@
       "maxTries": 2,
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "หน่วยความจำบทสนทนาแบบถาวรเก็บใน PostgreSQL แยกตามผู้ใช้ LINE ข้อมูลไม่หายเมื่อรีสตาร์ทระบบ"
@@ -366,8 +366,8 @@
       "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "ค้นตัวบทประมวลรัษฎากรฉบับปัจจุบันด้วยเลขมาตรา ต้องนำเข้าตาราง revenue_code_current ก่อนใช้งาน ดู postgres/import-revenue-code-current.py"
@@ -443,8 +443,8 @@
       "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "บันทึกบทสนทนาพร้อมเวลาตอบสนองและผลการสืบค้น สำหรับนำไปวิเคราะห์ผลในบทที่ 4"
@@ -503,8 +503,8 @@
       "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "สร้างระเบียนผู้ใช้ด้วยสถานะ pending ไม่ใช่ granted เพราะการที่ผู้ใช้กดเพิ่มเพื่อนไม่ถือว่ายินยอมให้เก็บข้อมูล"
@@ -598,8 +598,8 @@
       "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "บันทึกคำตอบพร้อมเวลาและรุ่นของข้อความที่ผู้ใช้เห็น เพื่อพิสูจน์ย้อนหลังได้"
@@ -747,8 +747,8 @@
       "onError": "continueRegularOutput",
       "credentials": {
         "postgres": {
-          "id": "REPLACE_WITH_YOUR_POSTGRES_CREDENTIAL_ID",
-          "name": "Tax Advisor Postgres"
+          "id": "W86if8U27I8VHeAj",
+          "name": "Postgres account"
         }
       },
       "notes": "ลบข้อมูลทั้งสองตาราง หรือกลับมาให้เก็บอีกครั้ง ตามคำสั่งที่ผู้ใช้พิมพ์"
