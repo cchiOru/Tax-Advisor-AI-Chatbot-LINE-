@@ -944,11 +944,55 @@ const MAX_LENGTH = 2000;
 const FALLBACK =
   '⚠️ ขออภัยค่ะ ระบบขัดข้องชั่วคราว\nกรุณาลองพิมพ์คำถามใหม่อีกครั้งในอีกสักครู่นะคะ';
 
+// ข้อความแจ้งข้อผิดพลาดไม่ต้องมีบรรทัดคำนวณจาก เพราะไม่มีการคำนวณเกิดขึ้น
+function isErrorAnswerCandidate(text) {
+  return !text || text === FALLBACK;
+}
+
 let answer = item.json.output || item.json.text || '';
 if (item.json.error || !answer) {
   answer = FALLBACK;
 }
 answer = String(answer).trim();
+
+// ---------------------------------------------------------------------------
+// เติมบรรทัด "คำนวณจาก" ให้เองเมื่อแบบจำลองไม่ยกมา
+// ---------------------------------------------------------------------------
+// บรรทัดนี้บอกผู้ใช้ว่าระบบเข้าใจโจทย์ว่าอย่างไร สร้างจากค่าที่ส่งเข้าเครื่องคำนวณจริง
+// มีสองหน้าที่
+//   1. โจทย์ภาษาคนกำกวมได้ เช่น บุตรสอง หมายถึง บุตร 2 คน หรือ บุตรคนที่สอง
+//      ถ้าระบบตีความผิดแล้วไม่บอก ผู้ใช้ไม่มีทางรู้
+//   2. ถ้าแบบจำลองส่งค่าผิดช่อง ผู้ใช้เห็นทันที เช่นโจทย์บอกประกันชีวิต
+//      แต่ระบบไปใส่ช่อง RMF ด้วย ซึ่งเดิมความผิดพลาดแบบนี้ซ่อนอยู่
+//
+// เคยลองสั่งในคำสั่งระบบให้ยกบรรทัดนี้มาแสดง แต่วัดจากการใช้งานจริงแล้วแบบจำลองไม่ทำตาม
+// จึงย้ายมาบังคับด้วยโค้ด ตามหลักการเดิมของงานนี้
+// ว่าสิ่งที่ต้องรับประกันได้ต้องบังคับด้วยกฎ ไม่ใช่ขอความร่วมมือ
+//
+// เขียนแบบไม่ให้พังถ้าโครงสร้างไม่ตรงที่คาด ถ้าหาไม่เจอก็ปล่อยคำตอบเดิมไว้
+function findCalculationBasis(steps) {
+  if (!Array.isArray(steps)) return '';
+  for (const step of steps) {
+    const raw = step && (step.observation ?? step.output ?? '');
+    if (!raw) continue;
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (parsed && parsed['คำนวณจาก']) return String(parsed['คำนวณจาก']);
+    } catch (e) {
+      // ผลจากเครื่องมือไม่ใช่ JSON ก็ข้ามไป ไม่ถือเป็นข้อผิดพลาด
+    }
+  }
+  return '';
+}
+
+const calcBasis = findCalculationBasis(item.json.intermediateSteps);
+if (calcBasis && !isErrorAnswerCandidate(answer)) {
+  // เติมเฉพาะเมื่อยังไม่มีอยู่ในคำตอบ กันไม่ให้ซ้ำสองบรรทัด
+  const alreadyThere = answer.indexOf('คำนวณจาก') >= 0;
+  if (!alreadyThere) {
+    answer = 'คำนวณจาก ' + calcBasis + '\n' + answer;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // ด่านตรวจคำตอบผิดรูปแบบ
@@ -1365,7 +1409,13 @@ def build():
             "parameters": {
                 "promptType": "define",
                 "text": "={{ $json.agentPrompt }}",
-                "options": {"systemMessage": SYSTEM_MESSAGE, "maxIterations": 5},
+                "options": {
+                    "systemMessage": SYSTEM_MESSAGE,
+                    "maxIterations": 5,
+                    # ขอขั้นตอนกลางกลับมาด้วย เพื่อให้โหนดเตรียมคำตอบอ่านผลจากเครื่องคำนวณได้
+                    # จำเป็นเพราะบรรทัด คำนวณจาก ต้องบังคับด้วยโค้ด ไม่ใช่ขอความร่วมมือจากแบบจำลอง
+                    "returnIntermediateSteps": True,
+                },
             },
             "id": "node-agent",
             "name": "AI Agent (Tax Advisor)",
@@ -1908,7 +1958,13 @@ def build():
             "parameters": {
                 "promptType": "define",
                 "text": "={{ $json.agentPrompt }}",
-                "options": {"systemMessage": SYSTEM_MESSAGE, "maxIterations": 5},
+                "options": {
+                    "systemMessage": SYSTEM_MESSAGE,
+                    "maxIterations": 5,
+                    # ขอขั้นตอนกลางกลับมาด้วย เพื่อให้โหนดเตรียมคำตอบอ่านผลจากเครื่องคำนวณได้
+                    # จำเป็นเพราะบรรทัด คำนวณจาก ต้องบังคับด้วยโค้ด ไม่ใช่ขอความร่วมมือจากแบบจำลอง
+                    "returnIntermediateSteps": True,
+                },
             },
             "id": "node-agent-nomem",
             "name": "AI Agent (No Memory)",

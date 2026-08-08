@@ -381,3 +381,72 @@ test('RG-39 คำตอบที่ใช้ ค่ะ อยู่แล้ว
   const r = runPrepareReply({ output: original, questionCategory: 'สิทธิ์ลดหย่อน' });
   assert.ok(r.answer.startsWith(original));
 });
+
+// ---------------------------------------------------------------------------
+//  บรรทัด "คำนวณจาก" ต้องถูกเติมด้วยโค้ด ไม่ใช่หวังให้แบบจำลองยกมาเอง
+// ---------------------------------------------------------------------------
+//  เคยสั่งในคำสั่งระบบให้ยกบรรทัดนี้มาแสดง แต่วัดจากการใช้งานจริงแล้วไม่ทำตาม
+//  จึงย้ายมาบังคับด้วยโค้ด ตามหลักการเดิมของงานนี้
+//
+//  บรรทัดนี้ทำสองอย่าง
+//    1. บอกว่าระบบตีความโจทย์ที่กำกวมว่าอย่างไร เช่น บุตรสอง คิดเป็น 2 คน
+//    2. เผยให้เห็นเมื่อแบบจำลองส่งค่าผิดช่อง ซึ่งเดิมความผิดพลาดแบบนี้ซ่อนอยู่
+
+function runWithSteps(output, steps, questionCategory = 'คำนวณภาษี') {
+  const fn = new Function('$input', '$', '$env', PREPARE_CODE);
+  return fn(
+    { first: () => ({ json: { output, intermediateSteps: steps } }) },
+    (name) =>
+      ({
+        'Extract LINE Data': {
+          first: () => ({ json: { replyToken: 'T', userMessage: 'q', receivedAt: Date.now() } }),
+        },
+        'Upsert User': { first: () => ({ json: { id: 1, consent_status: 'granted' } }) },
+        'Build Context': {
+          first: () => ({ json: { questionCategory, knowledgeHits: 2, matchedKnowledge: 'x' } }),
+        },
+      })[name],
+    {}
+  )[0].json;
+}
+
+const STEP = [
+  {
+    observation: JSON.stringify({
+      สำเร็จ: true,
+      คำนวณจาก: 'เงินเดือน 600,000 บาท · ค่าลดหย่อนบุตร 2 คน 60,000 บาท',
+      สรุป: { ภาษีที่ต้องชำระ: 15500 },
+    }),
+  },
+];
+
+test('RG-40 ต้องเติมบรรทัดคำนวณจากให้เอง เมื่อแบบจำลองไม่ยกมา', () => {
+  const r = runWithSteps('ภาษีที่ต้องชำระคือ 15,500 บาทค่ะ', STEP);
+  assert.ok(r.answer.startsWith('คำนวณจาก '), `ไม่ได้เติมบรรทัดให้: ${r.answer.slice(0, 60)}`);
+  assert.ok(r.answer.includes('บุตร 2 คน'), 'ต้องเห็นการตีความจำนวนบุตร');
+  assert.ok(r.answer.includes('15,500'), 'คำตอบเดิมต้องยังอยู่ครบ');
+});
+
+test('RG-41 ถ้าแบบจำลองยกมาเองแล้ว ต้องไม่เติมซ้ำเป็นสองบรรทัด', () => {
+  const r = runWithSteps('คำนวณจาก เงินเดือน 600,000 บาท\nภาษีที่ต้องชำระคือ 15,500 บาทค่ะ', STEP);
+  const count = (r.answer.match(/คำนวณจาก/g) || []).length;
+  assert.strictEqual(count, 1, `พบบรรทัดคำนวณจาก ${count} ครั้ง`);
+});
+
+test('RG-42 คำถามที่ไม่ได้เรียกเครื่องคำนวณ ต้องไม่มีบรรทัดนี้', () => {
+  const r = runWithSteps('ค่าลดหย่อนส่วนตัวหักได้ 60,000 บาทค่ะ', [], 'สิทธิ์ลดหย่อน');
+  assert.ok(!r.answer.includes('คำนวณจาก'));
+});
+
+test('RG-43 ข้อมูลขั้นตอนกลางผิดรูปแบบ ต้องไม่ทำให้ระบบพัง', () => {
+  // n8n อาจเปลี่ยนโครงสร้างในเวอร์ชันใหม่ ระบบต้องยังตอบผู้ใช้ได้เสมอ
+  for (const steps of [undefined, null, 'ไม่ใช่อาร์เรย์', [{}], [{ observation: 'ไม่ใช่ JSON' }]]) {
+    const r = runWithSteps('ภาษีที่ต้องชำระคือ 15,500 บาทค่ะ', steps);
+    assert.ok(r.answer.includes('15,500'), `พังเมื่อขั้นตอนกลางเป็น ${JSON.stringify(steps)}`);
+  }
+});
+
+test('RG-44 ข้อความแจ้งข้อผิดพลาดต้องไม่ถูกเติมบรรทัดคำนวณจาก', () => {
+  const r = runWithSteps('', STEP);
+  assert.ok(!r.answer.includes('คำนวณจาก'), 'ไม่มีการคำนวณเกิดขึ้น จึงไม่ควรมีบรรทัดนี้');
+});
