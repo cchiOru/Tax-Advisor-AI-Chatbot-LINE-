@@ -233,10 +233,19 @@ function loadIntentRules() {
 function classifyIntent(question, rules) {
   const q = (question || '').toLowerCase();
   const hasDigit = /[0-9\u0e50-\u0e59]/.test(q);
+  // ตัวเลขที่เป็นอายุล้วน ๆ ไม่ควรทำให้คำถามกลายเป็นหมวดคำนวณ
+  // ต้องใช้ตรรกะเดียวกับโหนด Build Context ในระบบจริงเสมอ
+  const digitsAreAgeOnly = !/[0-9๐-๙]/.test(
+    q.replace(/[0-9๐-๙,]+\s*ปี/g, '')
+  );
+  const moneyWords = rules.incomeWords.concat(['บาท']);
+  const looksLikeAgeQuestion =
+    hasDigit && digitsAreAgeOnly && !moneyWords.some((w) => q.indexOf(w) >= 0);
+
   let category = 'อื่นๆ';
   for (const rule of rules.intentRules) {
-    const matched = rule.keywords.some((k) => q.indexOf(k) >= 0);
-    if (matched && (!rule.requireDigit || hasDigit)) {
+    if (rule.requireDigit && (!hasDigit || looksLikeAgeQuestion)) continue;
+    if (rule.keywords.some((k) => q.indexOf(k) >= 0)) {
       category = rule.category;
       break;
     }
@@ -283,10 +292,15 @@ function retrieve(question, keywordMap, kb, limit = 3, isCalc = false) {
       .map((r, i) => `[${i + 1}] หมวด: ${r.category}\nหัวข้อ: ${r.title}\n${r.content}\nแหล่งที่มา: ${r.source}`)
       .join('\n\n---\n\n');
 
-  const selected = scored.slice();
-  while (selected.length > 1 && render(selected).length > CONTEXT_BUDGET) {
-    selected.pop();
+  // ไล่ตามอันดับแล้วหยิบเฉพาะรายการที่ยังใส่ลงในงบได้ ข้ามรายการที่ใหญ่เกิน
+  // ต้องใช้ตรรกะเดียวกับโหนด Build Context ในระบบจริงเสมอ
+  // ไม่งั้นตัวเลขที่วัดได้จะไม่ใช่ความสามารถของระบบที่ผู้ใช้เจอจริง
+  let selected = [];
+  for (const row of scored) {
+    const trial = selected.concat([row]);
+    if (render(trial).length <= CONTEXT_BUDGET) selected = trial;
   }
+  if (selected.length === 0 && scored.length > 0) selected = [scored[0]];
 
   const context = selected.length
     ? render(selected)

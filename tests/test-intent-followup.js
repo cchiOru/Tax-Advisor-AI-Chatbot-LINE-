@@ -44,8 +44,14 @@ function classify(question, lastCategory = '') {
   let category = 'อื่นๆ';
   const hasDigit = /[0-9]/.test(q);
 
+  // ตัวเลขที่เป็นอายุล้วน ๆ ไม่ควรทำให้คำถามกลายเป็นหมวดคำนวณ
+  const digitsAreAgeOnly = !/[0-9๐-๙]/.test(q.replace(/[0-9๐-๙,]+\s*ปี/g, ''));
+  const moneyWords = RULES.incomeWords.concat(['บาท']);
+  const looksLikeAgeQuestion =
+    hasDigit && digitsAreAgeOnly && !moneyWords.some((w) => q.indexOf(w) >= 0);
+
   for (const rule of RULES.intentRules) {
-    if (rule.requireDigit && !hasDigit) continue;
+    if (rule.requireDigit && (!hasDigit || looksLikeAgeQuestion)) continue;
     if (rule.keywords.some((k) => q.indexOf(k) >= 0)) {
       category = rule.category;
       break;
