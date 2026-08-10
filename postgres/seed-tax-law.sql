@@ -1,6 +1,6 @@
 -- ================================================================
 --  seed-tax-law.sql
---  ฐานความรู้กฎหมายภาษีไทย สำหรับ AI Tax Advisor (RAG)
+--  ฐานข้อมูลกฎหมายภาษีไทย สำหรับ AI Tax Advisor (RAG)
 --  วิธีรันกับฐานข้อมูลที่ใช้งานอยู่จริง (ไม่ล้างข้อมูลเดิม):
 --    docker exec -i tax-advisor-postgres psql -U <POSTGRES_USER> -d tax_advisor < seed-tax-law.sql
 -- ================================================================
@@ -27,7 +27,7 @@ TRUNCATE TABLE tax_law_knowledge RESTART IDENTITY;
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'ภาษีเงินได้บุคคลธรรมดา',
+  'ผู้มีหน้าที่เสียภาษี',
   'ฐานภาษีและอัตราภาษีเงินได้บุคคลธรรมดา ปี 2567',
   'อัตราภาษีเงินได้บุคคลธรรมดาแบบขั้นบันได (Progressive Tax) ประจำปี 2567:
   - เงินได้สุทธิ 0 - 150,000 บาท: ยกเว้น (0%)
@@ -45,7 +45,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
   2567
 ),
 (
-  'ภาษีเงินได้บุคคลธรรมดา',
+  'ผู้มีหน้าที่เสียภาษี',
   'ประเภทเงินได้พึงประเมิน 8 ประเภท',
   'เงินได้พึงประเมินแบ่งออกเป็น 8 ประเภทตามมาตรา 40:
 
@@ -85,7 +85,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'ค่าลดหย่อนภาษี',
+  'การหักลดหย่อน',
   'ค่าลดหย่อนส่วนตัวและครอบครัว ปี 2567',
   'ค่าลดหย่อนพื้นฐานที่ทุกคนได้รับ:
 
@@ -107,7 +107,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
   2567
 ),
 (
-  'ค่าลดหย่อนภาษี',
+  'การหักลดหย่อน',
   'ค่าลดหย่อนกองทุนและประกัน ปี 2567',
   'ค่าลดหย่อนด้านการออมและประกัน:
 
@@ -129,7 +129,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
   2567
 ),
 (
-  'ค่าลดหย่อนภาษี',
+  'การหักลดหย่อน',
   'ค่าลดหย่อนนโยบายรัฐ ปี 2567',
   'ค่าลดหย่อนตามนโยบายรัฐบาล:
 
@@ -155,7 +155,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'กำหนดการยื่นภาษี',
+  'การยื่นแบบและชำระภาษี',
   'กำหนดเวลายื่นแบบภาษีเงินได้บุคคลธรรมดา ปี 2568 (สำหรับเงินได้ปี 2567)',
   'กำหนดการยื่นแบบภาษีเงินได้บุคคลธรรมดา:
 
@@ -178,7 +178,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
   2567
 ),
 (
-  'กำหนดการยื่นภาษี',
+  'การยื่นแบบและชำระภาษี',
   'ภาษีที่ดินและสิ่งปลูกสร้าง กำหนดการชำระปี 2568',
   'ภาษีที่ดินและสิ่งปลูกสร้าง (ชำระให้ท้องถิ่น/อบต./เทศบาล):
 
@@ -214,7 +214,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'ภาษีมูลค่าเพิ่ม',
+  'ภาษีอื่นที่เกี่ยวข้อง',
   'ภาษีมูลค่าเพิ่ม (VAT) 7%',
   'ภาษีมูลค่าเพิ่ม (VAT):
 
@@ -245,7 +245,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'โทษและเบี้ยปรับ',
+  'เบี้ยปรับ เงินเพิ่ม และโทษ',
   'บทลงโทษการฝ่าฝืนกฎหมายภาษี',
   'โทษและเบี้ยปรับตามประมวลรัษฎากร:
 
@@ -277,7 +277,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'การคืนภาษี',
+  'การขอคืนภาษี',
   'วิธีขอคืนภาษีและระยะเวลา',
   'การขอคืนภาษีเงินได้บุคคลธรรมดา:
 
@@ -309,7 +309,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'ภาษีหัก ณ ที่จ่าย',
+  'การยื่นแบบและชำระภาษี',
   'อัตราภาษีหัก ณ ที่จ่ายที่พบบ่อย',
   'อัตราภาษีหัก ณ ที่จ่าย (Withholding Tax):
 
@@ -341,7 +341,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
 
 INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUES
 (
-  'เคล็ดลับประหยัดภาษี',
+  'การหักลดหย่อน',
   'วิธีลดภาษีอย่างถูกกฎหมาย',
   'เคล็ดลับประหยัดภาษีอย่างถูกกฎหมาย:
 
@@ -370,7 +370,7 @@ INSERT INTO tax_law_knowledge (category, title, content, source, tax_year) VALUE
   2567
 ),
 (
-  'เคล็ดลับประหยัดภาษี',
+  'การหักลดหย่อน',
   'ตัวอย่างการคำนวณภาษีเงินเดือน',
   'ตัวอย่าง: พนักงานเงินเดือน 50,000 บาท/เดือน (เงินได้ปีละ 600,000 บาท)
 
