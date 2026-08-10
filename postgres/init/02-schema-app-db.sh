@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_n8n_chat_histories_session
     ON n8n_chat_histories (session_id);
 
 -- =========================================================
--- ฐานความรู้กฎหมายภาษี (ใช้ประกอบการตอบคำถามของ AI Agent)
+-- ฐานข้อมูลกฎหมายภาษี (ใช้ประกอบการตอบคำถามของ AI Agent)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS tax_knowledge (
     id              SERIAL PRIMARY KEY,
@@ -90,7 +90,7 @@ INSERT INTO tax_deductions (deduction_name, max_amount, description, tax_year) V
 ON CONFLICT DO NOTHING;
 
 -- =========================================================
--- ฐานความรู้กฎหมายภาษีแบบละเอียด (ใช้ทำ RAG ให้ AI Agent ค้นก่อนตอบ)
+-- ฐานข้อมูลกฎหมายภาษีแบบละเอียด (ใช้ทำ RAG ให้ AI Agent ค้นก่อนตอบ)
 -- =========================================================
 CREATE TABLE IF NOT EXISTS tax_law_knowledge (
     id          SERIAL PRIMARY KEY,
