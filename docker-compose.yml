@@ -126,6 +126,46 @@ services:
     profiles:
       - tools
 
+  # ==========================================================================
+  #  หน้าเว็บหลังบ้านสำหรับผู้ดูแลระบบ
+  #    เข้าใช้ที่ http://localhost:8080
+  #
+  #  ดูสถิติการใช้งาน จัดการฐานข้อมูล และดูคะแนนความพึงพอใจ
+  #  แต่ดูประวัติการสนทนาของผู้ใช้ไม่ได้ ไม่ว่ากรณีใด
+  #
+  #  บริการนี้ต่อฐานข้อมูลด้วยบัญชี tax_admin_readonly
+  #  ซึ่งถูกเพิกถอนสิทธิ์อ่านตาราง conversations และ n8n_chat_histories
+  #  ไว้ตั้งแต่ระดับฐานข้อมูลแล้ว ดู postgres/migrations/005-add-admin-support.sql
+  # ==========================================================================
+  admin:
+    build: ./admin
+    container_name: tax-advisor-admin
+    restart: unless-stopped
+    environment:
+      ADMIN_PORT: 8080
+      ADMIN_DB_HOST: postgres
+      ADMIN_DB_PORT: 5432
+      APP_DB_NAME: ${APP_DB_NAME:-tax_advisor}
+      # รหัสผ่านสำหรับเข้าหน้าเว็บ ตั้งใน .env
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # รหัสผ่านของบัญชีฐานข้อมูล tax_admin_readonly ตั้งใน .env
+      ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD}
+      TZ: ${GENERIC_TIMEZONE:-Asia/Bangkok}
+    ports:
+      # ผูกกับ 127.0.0.1 เท่านั้น ไม่เปิดออกสู่เครือข่ายภายนอก
+      # หน้าหลังบ้านไม่ควรเข้าถึงได้จากอินเทอร์เน็ตแม้จะมีรหัสผ่านแล้วก็ตาม
+      - "127.0.0.1:${ADMIN_WEB_PORT:-8080}:8080"
+    volumes:
+      # อ่านไฟล์เวิร์กโฟลว์เพื่อใช้ตารางคำสำคัญและงบบริบทชุดเดียวกับระบบจริง
+      # โค้ดอยู่ที่ /app จึงมองหาไฟล์ที่ /n8n/workflows ซึ่งตรงกับที่ผูกไว้ตรงนี้
+      # ผูกแบบอ่านอย่างเดียว หน้าหลังบ้านต้องแก้เวิร์กโฟลว์ไม่ได้
+      - ./n8n/workflows:/n8n/workflows:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - tax-advisor-net
+
 volumes:
   postgres_data:
   n8n_data:

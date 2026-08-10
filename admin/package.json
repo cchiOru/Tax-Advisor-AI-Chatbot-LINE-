@@ -1,0 +1,16 @@
+{
+  "name": "tax-advisor-admin",
+  "version": "1.0.0",
+  "description": "หน้าเว็บหลังบ้านสำหรับผู้ดูแลระบบที่ปรึกษาภาษี ดูสถิติและจัดการฐานข้อมูล โดยดูประวัติแชทไม่ได้",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
