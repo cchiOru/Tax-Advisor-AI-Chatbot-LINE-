@@ -80,7 +80,29 @@ PROVIDERS = {
         "node_name": "Google Gemini Chat Model",
         "node_type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
         "type_version": 1,
-        "model": "models/gemini-3-flash-preview",
+        # ---------------------------------------------------------------
+        #  ทำไมเปลี่ยนจาก gemini-3-flash-preview มาเป็น gemini-3.1-flash-lite
+        # ---------------------------------------------------------------
+        #  1) ตัวเลขในบทที่ 4 ต้องมาจากแบบจำลองตัวเดียวกับที่ระบบรันจริง
+        #     ผลวัด 345 ข้อที่ได้ 100% วัดจาก gemini-3.1-flash-lite
+        #     แต่เวิร์กโฟลว์ตั้งเป็น gemini-3-flash-preview มาตลอด
+        #     ถ้าไม่แก้ ตัวเลขที่รายงานจะไม่ใช่ตัวเลขของระบบที่ส่งงาน
+        #
+        #  2) เร็วกว่ามาก วัดจากไฟล์ผลจริงของโครงงานนี้
+        #       gemini-3.1-flash-lite   มัธยฐาน 1,710 ms  p95 4,922 ms
+        #       gemini-3-flash-preview  มัธยฐาน 6,553 ms  p95 9,667 ms
+        #     ผู้ใช้บน LINE รู้สึกถึงความต่างระดับนี้ชัดเจน
+        #
+        #  3) เป็นรุ่นเสถียร ไม่ใช่รุ่น preview
+        #     เอกสารของ Google ระบุว่ารุ่นทดลองและรุ่น preview
+        #     ถูกจำกัดอัตราการเรียกใช้เข้มกว่ารุ่นปกติ
+        #     ซึ่งตรงกับที่พบจริง คือ preview วัดได้วันละ 10 ข้อ
+        #     ส่วน flash-lite วัดครบ 345 ข้อจบในวันเดียว
+        #     https://ai.google.dev/gemini-api/docs/rate-limits
+        #
+        #  ถ้าจะเปลี่ยนกลับ ต้องแก้ทั้งที่นี่ และ GEMINI_MODEL กับ
+        #  ACTIVE_MODEL_NAME ในไฟล์ .env ให้ตรงกันทั้งสามที่
+        "model": "models/gemini-3.1-flash-lite",
         "cred_key": "googlePalmApi",
         "cred_name": "Google Gemini API",
         "cred_placeholder": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",

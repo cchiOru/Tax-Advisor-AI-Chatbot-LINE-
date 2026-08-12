@@ -252,8 +252,8 @@
         "model": {
           "__rl": true,
           "mode": "list",
-          "value": "models/gemini-3-flash-preview",
-          "cachedResultName": "models/gemini-3-flash-preview"
+          "value": "models/gemini-3.1-flash-lite",
+          "cachedResultName": "models/gemini-3.1-flash-lite"
         },
         "options": {
           "temperature": 0.3,
