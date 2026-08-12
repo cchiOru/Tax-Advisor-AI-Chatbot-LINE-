@@ -87,6 +87,20 @@ button.อันตราย{background:var(--อันตราย)}
 .ป้ายเล็ก{display:inline-block;padding:1px 8px;border-radius:20px;font-size:12px;
   background:var(--พื้นหลัง);border:1px solid var(--เส้น);color:var(--รอง)}
 .ป้ายเล็ก.คำนวณ{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+
+/* ป้ายสถานะการยืนยัน ใช้สีบอกทันทีว่าค่านั้นเชื่อได้แค่ไหน
+   เขียวคือคนยืนยันแล้ว เหลืองคือยังเป็นค่าที่ระบบเดาไว้ */
+.ป้ายเล็ก.ยืนยันแล้ว{background:#ecfdf5;border-color:#a7f3d0;color:var(--ดี)}
+.ป้ายเล็ก.ยังไม่ยืนยัน{background:#fffbeb;border-color:#fde68a;color:var(--เตือน)}
+.ว่างในตาราง{color:var(--เส้น)}
+/* เครื่องหมายเตือนรายการที่ยาวเกินไป วางไว้ข้างหัวข้อหลังตัดคอลัมน์ความยาวออก */
+.เตือนยาว{color:var(--เตือน);font-weight:700;cursor:help}
+
+/* ป้ายที่เป็นปุ่มในตัว หน้าตาเหมือนป้ายทุกอย่าง แต่กดได้
+   ทำแบบนี้แทนการมีคอลัมน์ปุ่มแยก เพื่อให้ตารางไม่แน่นจนอ่านยาก */
+form.ป้ายฟอร์ม{display:inline;margin:0}
+button.ป้ายเล็ก{cursor:pointer;font-family:inherit;line-height:1.6}
+button.ป้ายเล็ก:hover{filter:brightness(0.94)}
 .แท่ง{height:7px;background:var(--พื้นหลัง);border-radius:4px;overflow:hidden;min-width:70px}
 .แท่ง>i{display:block;height:100%;background:var(--เน้น)}
 .บันทึกท้าย{color:var(--รอง);font-size:13px;margin-top:8px}
